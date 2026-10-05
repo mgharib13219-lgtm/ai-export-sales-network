@@ -1,0 +1,40 @@
+services:
+  - type: web
+    name: ai-export-sales-network
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /ready
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: PORT
+        value: 10000
+      - key: ADMIN_TOKEN
+        sync: false
+      - key: AI_PROVIDER
+        value: none
+      - key: AI_API_KEY
+        sync: false
+      - key: AI_MODEL
+        value: gpt-5.6-luna
+      - key: AI_WEB_SEARCH
+        value: true
+      - key: SEARCH_PROVIDER
+        value: none
+      - key: SEARCH_API_KEY
+        sync: false
+      - key: SEARCH_BASE_URL
+        sync: false
+      - key: EMAIL_PROVIDER
+        value: none
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ai-export-sales-network-db
+          property: connectionString
+
+databases:
+  - name: ai-export-sales-network-db
+    databaseName: export_sales
+    user: export_sales
+    region: frankfurt
