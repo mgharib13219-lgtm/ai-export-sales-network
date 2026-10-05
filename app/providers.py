@@ -93,9 +93,9 @@ class ContactExtractor:
                 pages.append(str(rr.url))
                 if len(pages) >= 4:
                     break
-        emails = sorted(set(re.findall(r'[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}', html, re.I)))
+        emails = sorted(set(re.findall(r'[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}', html, re.I)))
         emails = [e for e in emails if not any(x in e.lower() for x in ('example.com','sentry.io','wixpress.com'))]
-        phones = sorted(set(re.findall(r'(?<!\\d)(?:\\+?\\d[\\d\\s().-]{7,}\\d)(?!\\d)', html)))[:8]
+        phones = sorted(set(re.findall(r'(?<!\d)(?:\+?\d[\d\s().-]{7,}\d)(?!\d)', html)))[:8]
         text = re.sub(r'<[^>]+>', ' ', html).lower()
         terms = ['importer','import','distributor','wholesale','wholesaler','procurement','purchasing','buyer','rfq','request for quotation','supplier']
         signals = [t for t in terms if t in text]
@@ -107,7 +107,7 @@ class AIProvider:
     def _parse(self, text):
         if not text:
             return None
-        m = re.search(r'\\{.*\\}', text, re.S)
+        m = re.search(r'\{.*\}', text, re.S)
         if not m:
             return None
         try:
@@ -122,7 +122,7 @@ class AIProvider:
                 client = OpenAI(api_key=settings.ai_api_key, base_url=settings.ai_base_url or None)
                 schema = ('Return JSON only. buyer_verification: company_name,buyer_type,score(0-100),'
                           'risk_flags,evidence. buyer_match: fit_score,reasons. outreach_writer: subject,body.')
-                prompt = f'You are the {task} agent. {schema}\\nINPUT:\\n{json.dumps(payload,ensure_ascii=False)}'
+                prompt = f'You are the {task} agent. {schema}\nINPUT:\n{json.dumps(payload,ensure_ascii=False)}'
                 response = client.responses.create(
                     model=settings.ai_model,
                     input=prompt,
