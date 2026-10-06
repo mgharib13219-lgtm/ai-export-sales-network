@@ -8,6 +8,7 @@ from app.db import init_db, add_opportunity, list_opportunities, list_leads, get
 from app.auth import require_admin
 from app.settings import settings
 from agents.followup import FollowUpAgent
+from agents.rfq import RFQAgent
 from app.rate_limit import pipeline_limiter
 
 @asynccontextmanager
@@ -153,6 +154,19 @@ def crm_followup(lead_id:int):
     if not lead: raise HTTPException(404,'lead_not_found')
     if lead.get('stage') in ('won','lost','repeat'): raise HTTPException(400,'terminal_stage')
     return FollowUpAgent().create_draft(lead)
+
+@app.post('/crm/leads/{lead_id}/rfq-draft', dependencies=[Depends(require_admin)])
+def crm_rfq_draft(lead_id:int, product: Product):
+    lead=get_lead(lead_id)
+    if not lead:
+        raise HTTPException(404,'lead_not_found')
+    if lead.get('stage') in ('won','lost','repeat'):
+        raise HTTPException(400,'terminal_stage')
+    result=RFQAgent().create_draft(product.model_dump(), lead)
+    if result.get('status') == 'draft_only':
+        add_audit_event('rfq.draft_created','admin',str(lead_id),'lead',str(lead_id),
+                        {'product':product.name,'activity_id':result.get('activity_id')})
+    return result
 
 @app.post('/crm/leads/{lead_id}/activity', dependencies=[Depends(require_admin)])
 def crm_activity(lead_id:int, data:ActivityCreate):
