@@ -8,6 +8,7 @@ from app.db import init_db, add_opportunity, list_opportunities, list_leads, get
 from app.auth import require_admin
 from app.settings import settings
 from agents.followup import FollowUpAgent
+from app.rate_limit import pipeline_limiter
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -66,6 +67,9 @@ loadStats();loadLeads();
 
 @app.post('/opportunities/run', dependencies=[Depends(require_admin)])
 def run(product: Product, request: Request, x_idempotency_key: Optional[str] = Header(default=None)):
+    client_key = request.client.host if request.client else 'unknown'
+    if not pipeline_limiter.allow(client_key):
+        raise HTTPException(429, 'rate_limit_exceeded')
     if not x_idempotency_key:
         raise HTTPException(400, 'X-Idempotency-Key is required')
     try:
