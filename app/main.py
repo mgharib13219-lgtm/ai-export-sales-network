@@ -1,10 +1,10 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Header, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from app.workflow import run_opportunity_pipeline
-from app.db import init_db, add_opportunity, list_opportunities, list_leads, get_lead, update_lead, due_followups, add_activity, list_activities, crm_stats, LEAD_STAGES
+from app.db import init_db, add_opportunity, list_opportunities, list_leads, get_lead, update_lead, due_followups, add_activity, list_activities, crm_stats, LEAD_STAGES, claim_idempotency, complete_idempotency, fail_idempotency, add_audit_event, list_audit_events
 from app.auth import require_admin
 from app.settings import settings
 from agents.followup import FollowUpAgent
@@ -65,18 +65,43 @@ loadStats();loadLeads();
 </script></body></html>'''
 
 @app.post('/opportunities/run', dependencies=[Depends(require_admin)])
-def run(product: Product):
-    result=run_opportunity_pipeline(product.model_dump())
-    opps=result.get('opportunities') if isinstance(result,dict) else None
-    if opps:
-        for o in opps: add_opportunity({'product_name':product.name,**o})
-    else:
-        first=(product.target_countries or [''])[0]
-        add_opportunity({'product_name':product.name,'country':first,'buyer':'pending provider connection','score':0,'payload':result})
-    return result
+def run(product: Product, request: Request, x_idempotency_key: Optional[str] = Header(default=None)):
+    if not x_idempotency_key:
+        raise HTTPException(400, 'X-Idempotency-Key is required')
+    try:
+        claim = claim_idempotency(x_idempotency_key)
+    except ValueError:
+        raise HTTPException(400, 'invalid_idempotency_key')
+    if not claim['claimed']:
+        if claim['status'] == 'completed':
+            return claim['payload']
+        raise HTTPException(409, 'request_already_in_progress')
+    request_id = x_idempotency_key
+    try:
+        result=run_opportunity_pipeline(product.model_dump())
+        opps=result.get('opportunities') if isinstance(result,dict) else None
+        if opps:
+            for o in opps: add_opportunity({'product_name':product.name,**o})
+        else:
+            first=(product.target_countries or [''])[0]
+            add_opportunity({'product_name':product.name,'country':first,'buyer':'pending provider connection','score':0,'payload':result})
+        add_audit_event('pipeline.completed','admin',request_id,'product',product.name,
+                        {'target_countries':product.target_countries,'lead_ids':result.get('lead_ids',[])})
+        complete_idempotency(x_idempotency_key,result)
+        return result
+    except Exception as exc:
+        payload={'status':'error','request_id':request_id,'error':str(exc)}
+        try:
+            fail_idempotency(x_idempotency_key,payload)
+            add_audit_event('pipeline.failed','admin',request_id,'product',product.name,{'error':str(exc)})
+        finally:
+            raise
 
 @app.get('/opportunities', dependencies=[Depends(require_admin)])
 def opportunities(): return list_opportunities()
+
+@app.get('/audit/events', dependencies=[Depends(require_admin)])
+def audit_events(limit:int=100): return list_audit_events(limit)
 
 @app.get('/crm/stats', dependencies=[Depends(require_admin)])
 def crm_stats_api(): return crm_stats()
