@@ -13,3 +13,15 @@ def test_crm_api(monkeypatch,tmp_path):
     r=c.patch(f'/crm/leads/{lid}',json={'stage':'contacted'}); assert r.status_code==200
     r=c.post(f'/crm/leads/{lid}/follow-up'); assert r.status_code==200 and r.json()['status']=='draft_only'
     r=c.get(f'/crm/leads/{lid}'); assert len(r.json()['activities'])==1
+
+
+def test_rfq_to_negotiation_to_won_to_repeat(monkeypatch,tmp_path):
+    monkeypatch.setattr(db,'DB_PATH',tmp_path/'deal.db')
+    db.DB_PATH.parent.mkdir(parents=True,exist_ok=True)
+    db.init_db()
+    lid=db.upsert_lead({'title':'Buyer Co','domain':'buyer.example','market':'Oman','contact':{'emails':['sales@buyer.example']},'match_score':85})
+    c=TestClient(app)
+    assert c.patch(f'/crm/leads/{lid}',json={'stage':'rfq'}).status_code==200
+    assert c.patch(f'/crm/leads/{lid}',json={'stage':'negotiation'}).status_code==200
+    assert c.patch(f'/crm/leads/{lid}',json={'stage':'won'}).status_code==200
+    assert c.patch(f'/crm/leads/{lid}',json={'stage':'repeat'}).status_code==200
