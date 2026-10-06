@@ -130,6 +130,9 @@ def crm_update_lead(lead_id:int, data:LeadUpdate):
     if data.stage and current['stage'] in ('won','lost','repeat') and data.stage != current['stage']:
         raise HTTPException(400,'terminal_stage_locked')
     if not update_lead(lead_id,stage=data.stage,next_follow_up=data.next_follow_up,last_contacted_at=data.last_contacted_at): raise HTTPException(404,'lead_not_found')
+    if data.stage:
+        add_audit_event('crm.stage_changed','admin',str(lead_id),'lead',str(lead_id),
+                        {'from_stage':current['stage'],'to_stage':data.stage})
     return {'status':'ok','lead_id':lead_id}
 
 @app.get('/crm/followups/due', dependencies=[Depends(require_admin)])
