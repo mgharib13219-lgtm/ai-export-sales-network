@@ -70,6 +70,28 @@ def init_db():
           id BIGSERIAL PRIMARY KEY, idem_key TEXT NOT NULL UNIQUE, status TEXT NOT NULL,
           response_payload TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )''')
+        con.execute('''CREATE TABLE IF NOT EXISTS deals (
+          id BIGSERIAL PRIMARY KEY, lead_id BIGINT NOT NULL, quote_activity_id BIGINT,
+          product_name TEXT NOT NULL, buyer_company TEXT NOT NULL, country TEXT,
+          unit TEXT, quantity DOUBLE PRECISION, currency TEXT NOT NULL,
+          agreed_unit_price DOUBLE PRECISION, incoterm TEXT, payment_terms TEXT,
+          factory_share DOUBLE PRECISION, network_commission DOUBLE PRECISION,
+          status TEXT DEFAULT 'open', won_reason TEXT, lost_reason TEXT,
+          repeat_eligible BOOLEAN DEFAULT TRUE, repeat_until TIMESTAMP,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY(lead_id) REFERENCES leads(id), FOREIGN KEY(quote_activity_id) REFERENCES activities(id)
+        )''')
+        con.execute('''CREATE TABLE IF NOT EXISTS deals (
+          id INTEGER PRIMARY KEY AUTOINCREMENT, lead_id INTEGER NOT NULL, quote_activity_id INTEGER,
+          product_name TEXT NOT NULL, buyer_company TEXT NOT NULL, country TEXT,
+          unit TEXT, quantity REAL, currency TEXT NOT NULL,
+          agreed_unit_price REAL, incoterm TEXT, payment_terms TEXT,
+          factory_share REAL, network_commission REAL,
+          status TEXT DEFAULT 'open', won_reason TEXT, lost_reason TEXT,
+          repeat_eligible INTEGER DEFAULT 1, repeat_until DATETIME,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY(lead_id) REFERENCES leads(id), FOREIGN KEY(quote_activity_id) REFERENCES activities(id)
+        )''')
         con.execute('''CREATE TABLE IF NOT EXISTS activities (
           id BIGSERIAL PRIMARY KEY, lead_id BIGINT, kind TEXT, subject TEXT,
           body TEXT, status TEXT DEFAULT 'draft', occurred_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -228,3 +250,48 @@ def crm_stats():
     con.close()
     by_stage={r['stage']:r['c'] for r in rows}
     return {'total':total,'due_followups':due,'contacted_or_beyond':contacted,'by_stage':by_stage}
+
+
+def create_deal(row):
+    con=_con()
+    insert_sql='''INSERT INTO deals(
+      lead_id,quote_activity_id,product_name,buyer_company,country,unit,quantity,currency,
+      agreed_unit_price,incoterm,payment_terms,factory_share,network_commission,
+      status,won_reason,lost_reason,repeat_eligible,repeat_until
+    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'''
+    if _is_postgres(): insert_sql += ' RETURNING id'
+    cur=_execute(con,insert_sql,(
+        row['lead_id'],row.get('quote_activity_id'),row['product_name'],row['buyer_company'],
+        row.get('country'),row.get('unit'),row.get('quantity'),row['currency'],
+        row.get('agreed_unit_price'),row.get('incoterm'),row.get('payment_terms'),
+        row.get('factory_share'),row.get('network_commission'),row.get('status','open'),
+        row.get('won_reason'),row.get('lost_reason'),row.get('repeat_eligible',True),
+        row.get('repeat_until')
+    ))
+    rid=cur.fetchone()['id'] if _is_postgres() else cur.lastrowid
+    con.commit(); con.close(); return rid
+
+def get_deal(deal_id):
+    con=_con(); row=_execute(con,'SELECT * FROM deals WHERE id=?',(deal_id,)).fetchone(); con.close()
+    return dict(row) if row else None
+
+def list_deals(lead_id=None, status=None, limit=200):
+    con=_con()
+    clauses=[]; vals=[]
+    if lead_id is not None: clauses.append('lead_id=?'); vals.append(lead_id)
+    if status is not None: clauses.append('status=?'); vals.append(status)
+    where=(' WHERE '+ ' AND '.join(clauses)) if clauses else ''
+    vals.append(max(1,min(limit,500)))
+    rows=_execute(con,'SELECT * FROM deals'+where+' ORDER BY id DESC LIMIT ?',vals).fetchall()
+    con.close(); return [dict(r) for r in rows]
+
+def update_deal(deal_id, **fields):
+    allowed=('agreed_unit_price','incoterm','payment_terms','factory_share','network_commission','status','won_reason','lost_reason','repeat_eligible','repeat_until')
+    changes=[]; vals=[]
+    for key in allowed:
+        if key in fields and fields[key] is not None:
+            changes.append(f'{key}=?'); vals.append(fields[key])
+    if not changes: return False
+    changes.append('updated_at=CURRENT_TIMESTAMP'); vals.append(deal_id)
+    con=_con(); cur=_execute(con,f'UPDATE deals SET {",".join(changes)} WHERE id=?',vals)
+    con.commit(); con.close(); return cur.rowcount>0
