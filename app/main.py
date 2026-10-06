@@ -10,6 +10,7 @@ from app.settings import settings
 from agents.followup import FollowUpAgent
 from agents.rfq import RFQAgent
 from agents.quote import QuoteAgent
+from agents.negotiation import NegotiationAgent
 from app.rate_limit import pipeline_limiter
 
 @asynccontextmanager
@@ -44,6 +45,11 @@ class LeadUpdate(BaseModel):
     stage: Optional[str] = None
     next_follow_up: Optional[str] = None
     last_contacted_at: Optional[str] = None
+
+class CounterOffer(BaseModel):
+    quote: dict
+    counter_unit_price: float = Field(gt=0)
+    max_discount_pct: float = Field(default=5.0, ge=0, lt=100)
 
 class DealCreate(BaseModel):
     product_name: str = Field(min_length=2)
@@ -270,3 +276,14 @@ def crm_repeat_deal(deal_id:int):
     update_lead(deal['lead_id'],stage='repeat')
     add_audit_event('deal.repeat_activated','admin',str(deal_id),'deal',str(deal_id),{'lead_id':deal['lead_id']})
     return {'status':'repeat','deal_id':deal_id,'lead_id':deal['lead_id']}
+
+@app.post('/crm/leads/{lead_id}/negotiation-review', dependencies=[Depends(require_admin)])
+def crm_negotiation_review(lead_id:int, data:CounterOffer):
+    lead=get_lead(lead_id)
+    if not lead: raise HTTPException(404,'lead_not_found')
+    if lead.get('stage') != 'negotiation': raise HTTPException(400,'negotiation_stage_required')
+    result=NegotiationAgent().evaluate_counteroffer(data.quote,data.counter_unit_price,data.max_discount_pct)
+    activity_id=add_activity(lead_id,'negotiation','Buyer counteroffer review',__import__('json').dumps(result,ensure_ascii=False),'draft')
+    result['activity_id']=activity_id
+    add_audit_event('negotiation.counteroffer_reviewed','admin',str(lead_id),'lead',str(lead_id),{'activity_id':activity_id,'auto_accept':False})
+    return result
