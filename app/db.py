@@ -70,15 +70,10 @@ def init_db():
           id BIGSERIAL PRIMARY KEY, idem_key TEXT NOT NULL UNIQUE, status TEXT NOT NULL,
           response_payload TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )''')
-        con.execute('''CREATE TABLE IF NOT EXISTS audit_events (
-          id INTEGER PRIMARY KEY AUTOINCREMENT, event_type TEXT NOT NULL, actor TEXT,
-          request_id TEXT, entity_type TEXT, entity_id TEXT, payload TEXT,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )''')
-        con.execute('''CREATE TABLE IF NOT EXISTS idempotency_keys (
-          id INTEGER PRIMARY KEY AUTOINCREMENT, idem_key TEXT NOT NULL UNIQUE, status TEXT NOT NULL,
-          response_payload TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        con.execute('''CREATE TABLE IF NOT EXISTS activities (
+          id BIGSERIAL PRIMARY KEY, lead_id BIGINT, kind TEXT, subject TEXT,
+          body TEXT, status TEXT DEFAULT 'draft', occurred_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY(lead_id) REFERENCES leads(id)
         )''')
         con.execute('''CREATE TABLE IF NOT EXISTS deals (
           id BIGSERIAL PRIMARY KEY, lead_id BIGINT NOT NULL, quote_activity_id BIGINT,
@@ -90,22 +85,6 @@ def init_db():
           repeat_eligible BOOLEAN DEFAULT TRUE, repeat_until TIMESTAMP,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY(lead_id) REFERENCES leads(id), FOREIGN KEY(quote_activity_id) REFERENCES activities(id)
-        )''')
-        con.execute('''CREATE TABLE IF NOT EXISTS deals (
-          id INTEGER PRIMARY KEY AUTOINCREMENT, lead_id INTEGER NOT NULL, quote_activity_id INTEGER,
-          product_name TEXT NOT NULL, buyer_company TEXT NOT NULL, country TEXT,
-          unit TEXT, quantity REAL, currency TEXT NOT NULL,
-          agreed_unit_price REAL, incoterm TEXT, payment_terms TEXT,
-          factory_share REAL, network_commission REAL,
-          status TEXT DEFAULT 'open', won_reason TEXT, lost_reason TEXT,
-          repeat_eligible INTEGER DEFAULT 1, repeat_until DATETIME,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY(lead_id) REFERENCES leads(id), FOREIGN KEY(quote_activity_id) REFERENCES activities(id)
-        )''')
-        con.execute('''CREATE TABLE IF NOT EXISTS activities (
-          id BIGSERIAL PRIMARY KEY, lead_id BIGINT, kind TEXT, subject TEXT,
-          body TEXT, status TEXT DEFAULT 'draft', occurred_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY(lead_id) REFERENCES leads(id)
         )''')
     else:
         con.execute('''CREATE TABLE IF NOT EXISTS opportunities (
@@ -125,8 +104,29 @@ def init_db():
           body TEXT, status TEXT DEFAULT 'draft', occurred_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY(lead_id) REFERENCES leads(id)
         )''')
-    con.commit(); con.close()
-
+        con.execute('''CREATE TABLE IF NOT EXISTS audit_events (
+          id INTEGER PRIMARY KEY AUTOINCREMENT, event_type TEXT NOT NULL, actor TEXT,
+          request_id TEXT, entity_type TEXT, entity_id TEXT, payload TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )''')
+        con.execute('''CREATE TABLE IF NOT EXISTS idempotency_keys (
+          id INTEGER PRIMARY KEY AUTOINCREMENT, idem_key TEXT NOT NULL UNIQUE, status TEXT NOT NULL,
+          response_payload TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )''')
+        con.execute('''CREATE TABLE IF NOT EXISTS deals (
+          id INTEGER PRIMARY KEY AUTOINCREMENT, lead_id INTEGER NOT NULL, quote_activity_id INTEGER,
+          product_name TEXT NOT NULL, buyer_company TEXT NOT NULL, country TEXT,
+          unit TEXT, quantity REAL, currency TEXT NOT NULL,
+          agreed_unit_price REAL, incoterm TEXT, payment_terms TEXT,
+          factory_share REAL, network_commission REAL,
+          status TEXT DEFAULT 'open', won_reason TEXT, lost_reason TEXT,
+          repeat_eligible INTEGER DEFAULT 1, repeat_until DATETIME,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY(lead_id) REFERENCES leads(id), FOREIGN KEY(quote_activity_id) REFERENCES activities(id)
+        )''')
+    con.commit()
+    con.close()
 
 def claim_idempotency(idem_key):
     if not idem_key or len(idem_key) > 200:
