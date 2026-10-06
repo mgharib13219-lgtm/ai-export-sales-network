@@ -4,7 +4,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from app.workflow import run_opportunity_pipeline
-from app.db import init_db, add_opportunity, list_opportunities, list_leads, get_lead, update_lead, due_followups, add_activity, list_activities, crm_stats, LEAD_STAGES, claim_idempotency, complete_idempotency, fail_idempotency, add_audit_event, list_audit_events
+from app.db import init_db, add_opportunity, list_opportunities, list_leads, get_lead, update_lead, due_followups, add_activity, list_activities, crm_stats, LEAD_STAGES, claim_idempotency, complete_idempotency, fail_idempotency, add_audit_event, list_audit_events, create_deal, get_deal, list_deals, update_deal
 from app.auth import require_admin
 from app.settings import settings
 from agents.followup import FollowUpAgent
@@ -45,6 +45,18 @@ class LeadUpdate(BaseModel):
     next_follow_up: Optional[str] = None
     last_contacted_at: Optional[str] = None
 
+class DealCreate(BaseModel):
+    product_name: str = Field(min_length=2)
+    unit: str = ''
+    quantity: float = Field(gt=0)
+    currency: str = Field(min_length=3, max_length=10)
+    agreed_unit_price: float = Field(gt=0)
+    incoterm: str = Field(min_length=2)
+    payment_terms: str = Field(min_length=2)
+    factory_share: float = Field(ge=0)
+    network_commission: float = Field(ge=0)
+    quote_activity_id: Optional[int] = None
+    approval_confirmed: bool = False
 class ActivityCreate(BaseModel):
     kind: str = Field(min_length=2)
     subject: str = ''
@@ -216,3 +228,45 @@ def crm_quote_draft(lead_id:int, product: Product, target_margin_pct: float = 10
 def crm_activity(lead_id:int, data:ActivityCreate):
     if not get_lead(lead_id): raise HTTPException(404,'lead_not_found')
     return {'activity_id':add_activity(lead_id,data.kind,data.subject,data.body,data.status)}
+
+@app.get('/crm/deals', dependencies=[Depends(require_admin)])
+def crm_deals(lead_id: Optional[int]=None, status: Optional[str]=None, limit: int=200):
+    return list_deals(lead_id=lead_id, status=status, limit=max(1,min(limit,500)))
+
+@app.get('/crm/deals/{deal_id}', dependencies=[Depends(require_admin)])
+def crm_deal(deal_id:int):
+    deal=get_deal(deal_id)
+    if not deal: raise HTTPException(404,'deal_not_found')
+    return deal
+
+@app.post('/crm/leads/{lead_id}/deal', dependencies=[Depends(require_admin)])
+def crm_create_deal(lead_id:int, data:DealCreate):
+    lead=get_lead(lead_id)
+    if not lead: raise HTTPException(404,'lead_not_found')
+    if lead.get('stage') != 'negotiation': raise HTTPException(400,'deal_requires_negotiation_stage')
+    if not data.approval_confirmed: raise HTTPException(400,'human_approval_required')
+    if data.factory_share + data.network_commission > data.agreed_unit_price * data.quantity:
+        raise HTTPException(400,'commercial_shares_exceed_deal_value')
+    deal_id=create_deal({
+        'lead_id':lead_id, 'quote_activity_id':data.quote_activity_id,
+        'product_name':data.product_name, 'buyer_company':lead.get('company_name') or '',
+        'country':lead.get('country'), 'unit':data.unit, 'quantity':data.quantity,
+        'currency':data.currency, 'agreed_unit_price':data.agreed_unit_price,
+        'incoterm':data.incoterm, 'payment_terms':data.payment_terms,
+        'factory_share':data.factory_share, 'network_commission':data.network_commission,
+        'status':'won', 'won_reason':'human_approved_commercial_deal', 'repeat_eligible':True
+    })
+    update_lead(lead_id, stage='won')
+    activity_id=add_activity(lead_id,'deal','Deal won',__import__('json').dumps({'deal_id':deal_id},ensure_ascii=False),'approved')
+    add_audit_event('deal.won','admin',str(deal_id),'deal',str(deal_id),{'lead_id':lead_id,'activity_id':activity_id,'human_approved':True})
+    return {'status':'won','deal_id':deal_id,'lead_id':lead_id,'activity_id':activity_id,'repeat_eligible':True}
+
+@app.post('/crm/deals/{deal_id}/repeat', dependencies=[Depends(require_admin)])
+def crm_repeat_deal(deal_id:int):
+    deal=get_deal(deal_id)
+    if not deal: raise HTTPException(404,'deal_not_found')
+    if deal.get('status') != 'won' or not deal.get('repeat_eligible'): raise HTTPException(400,'repeat_not_eligible')
+    update_deal(deal_id,status='repeat')
+    update_lead(deal['lead_id'],stage='repeat')
+    add_audit_event('deal.repeat_activated','admin',str(deal_id),'deal',str(deal_id),{'lead_id':deal['lead_id']})
+    return {'status':'repeat','deal_id':deal_id,'lead_id':deal['lead_id']}
