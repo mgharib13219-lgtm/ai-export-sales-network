@@ -64,6 +64,9 @@ Never claim an external integration is live without an actual successful verific
 
 - Added prompt-injection hardening around untrusted buyer/search/web content sent to AI agents.
 - Added rate-limit regression tests.
+- Corrected PostgreSQL schema branch duplication found during source audit.
+- Added deterministic landed-cost baseline and explicit missing-cost reporting in Deal Intelligence.
+- Added non-negative validation for commercial cost inputs in the Product API model.
 
 ## Next engineering priorities
 1. Verify latest CI result.
