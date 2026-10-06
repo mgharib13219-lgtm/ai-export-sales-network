@@ -1,6 +1,7 @@
 import json
 import sqlite3
 from pathlib import Path
+from datetime import datetime, timedelta, timezone
 
 from .settings import settings
 
@@ -109,7 +110,26 @@ def claim_idempotency(idem_key):
             row = _execute(con, 'SELECT status,response_payload FROM idempotency_keys WHERE idem_key=?', (idem_key,)).fetchone()
             if not row:
                 raise
-            return {'claimed': False, 'status': row['status'], 'payload': json.loads(row['response_payload']) if row['response_payload'] else None}
+            status = row['status']
+            if status == 'processing':
+                updated = row['updated_at']
+                updated_dt = None
+                if updated:
+                    if isinstance(updated, str):
+                        try:
+                            updated_dt = datetime.fromisoformat(updated.replace('Z', '+00:00'))
+                        except ValueError:
+                            updated_dt = None
+                    else:
+                        updated_dt = updated
+                    if updated_dt and updated_dt.tzinfo is None:
+                        updated_dt = updated_dt.replace(tzinfo=timezone.utc)
+                if updated_dt and datetime.now(timezone.utc) - updated_dt > timedelta(minutes=15):
+                    cur = _execute(con, "UPDATE idempotency_keys SET updated_at=CURRENT_TIMESTAMP WHERE idem_key=? AND status='processing'", (idem_key,))
+                    con.commit()
+                    if cur.rowcount == 1:
+                        return {'claimed': True, 'status': 'processing', 'payload': None, 'reclaimed': True}
+            return {'claimed': False, 'status': status, 'payload': json.loads(row['response_payload']) if row['response_payload'] else None}
     finally:
         con.close()
 
