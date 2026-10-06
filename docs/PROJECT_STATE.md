@@ -55,6 +55,13 @@ Current GitHub Actions status at this checkpoint:
 Never store API keys, passwords, tokens, database credentials, or other secrets in this checkpoint or in chat.
 Never claim an external integration is live without an actual successful verification.
 
+## Latest engineering progress (2026-10-06)
+- Added persistent idempotency keys for the main opportunity pipeline.
+- Added persistent audit event storage and an admin audit endpoint.
+- Main pipeline now requires X-Idempotency-Key and rejects concurrent duplicate requests.
+- Added a baseline in-process rate limiter for pipeline execution (10 requests/minute per client); this is NOT yet distributed and must be replaced/extended before multi-instance/high-volume production.
+- Added tests for idempotency and audit persistence; CI verification for these latest commits is still not confirmed.
+
 ## Next engineering priorities
 1. Verify latest CI result.
 2. Audit current source against the original MVP source; do not overwrite richer source with simplified versions.
