@@ -9,6 +9,7 @@ from app.auth import require_admin
 from app.settings import settings
 from agents.followup import FollowUpAgent
 from agents.rfq import RFQAgent
+from agents.quote import QuoteAgent
 from app.rate_limit import pipeline_limiter
 
 @asynccontextmanager
@@ -29,6 +30,15 @@ class Product(BaseModel):
     capacity_per_month: Optional[float] = None
     certificates: List[str] = Field(default_factory=list)
     target_countries: List[str] = Field(default_factory=list)
+    shipping: Optional[float] = Field(default=None, ge=0)
+    insurance: Optional[float] = Field(default=None, ge=0)
+    duties: Optional[float] = Field(default=None, ge=0)
+    taxes: Optional[float] = Field(default=None, ge=0)
+    payment_fees: Optional[float] = Field(default=None, ge=0)
+    inspection: Optional[float] = Field(default=None, ge=0)
+    warehousing: Optional[float] = Field(default=None, ge=0)
+    financing: Optional[float] = Field(default=None, ge=0)
+    returns_or_waste: Optional[float] = Field(default=None, ge=0)
 
 class LeadUpdate(BaseModel):
     stage: Optional[str] = None
@@ -166,6 +176,31 @@ def crm_rfq_draft(lead_id:int, product: Product):
     if result.get('status') == 'draft_only':
         add_audit_event('rfq.draft_created','admin',str(lead_id),'lead',str(lead_id),
                         {'product':product.name,'activity_id':result.get('activity_id')})
+    return result
+
+@app.post('/crm/leads/{lead_id}/quote-draft', dependencies=[Depends(require_admin)])
+def crm_quote_draft(lead_id:int, product: Product, target_margin_pct: float = 10.0,
+                    incoterm: str = 'TBD', payment_terms: str = 'TBD', validity_days: int = 7):
+    lead=get_lead(lead_id)
+    if not lead:
+        raise HTTPException(404,'lead_not_found')
+    if lead.get('stage') in ('won','lost','repeat'):
+        raise HTTPException(400,'terminal_stage')
+    result=QuoteAgent().create_draft(
+        product.model_dump(), lead,
+        target_margin_pct=target_margin_pct,
+        incoterm=incoterm,
+        payment_terms=payment_terms,
+        validity_days=validity_days,
+    )
+    if result.get('status') == 'draft_only':
+        activity_id=add_activity(
+            lead_id, 'quote', 'Commercial quote draft',
+            __import__('json').dumps(result, ensure_ascii=False), 'draft'
+        )
+        result['activity_id']=activity_id
+        add_audit_event('quote.draft_created','admin',str(lead_id),'lead',str(lead_id),
+                        {'product':product.name,'activity_id':activity_id})
     return result
 
 @app.post('/crm/leads/{lead_id}/activity', dependencies=[Depends(require_admin)])
