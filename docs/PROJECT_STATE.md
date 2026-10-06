@@ -75,3 +75,5 @@ Never claim an external integration is live without an actual successful verific
 4. Verify PostgreSQL compatibility and migration strategy.
 5. Add/expand tests for security, failure modes and approval gates.
 6. Prepare Render deployment only after the above is sufficiently safe.
+
+- Product workflow progress: added an RFQ draft agent and authenticated CRM endpoint. RFQ generation is explicitly draft-only, records a CRM activity, and requires human review before any send.
