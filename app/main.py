@@ -140,6 +140,15 @@ def crm_update_lead(lead_id:int, data:LeadUpdate):
     if not current: raise HTTPException(404,'lead_not_found')
     if data.stage and current['stage'] in ('won','lost','repeat') and data.stage != current['stage']:
         raise HTTPException(400,'terminal_stage_locked')
+    allowed = {('rfq','negotiation'), ('negotiation','won'), ('negotiation','lost'), ('won','repeat')}
+    if data.stage and current['stage'] not in ('discovered','verified','matched','contacted','replied','rfq','negotiation','won','lost','repeat'):
+        raise HTTPException(400,'invalid_current_stage')
+    if data.stage and current['stage'] == 'rfq' and data.stage not in ('rfq','negotiation'):
+        raise HTTPException(400,'invalid_deal_transition')
+    if data.stage and current['stage'] == 'negotiation' and data.stage not in ('negotiation','won','lost'):
+        raise HTTPException(400,'invalid_deal_transition')
+    if data.stage and current['stage'] == 'won' and data.stage != 'repeat':
+        raise HTTPException(400,'invalid_deal_transition')
     if not update_lead(lead_id,stage=data.stage,next_follow_up=data.next_follow_up,last_contacted_at=data.last_contacted_at): raise HTTPException(404,'lead_not_found')
     if data.stage:
         add_audit_event('crm.stage_changed','admin',str(lead_id),'lead',str(lead_id),
