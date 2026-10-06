@@ -30,3 +30,15 @@ def test_audit_event_round_trip(monkeypatch, tmp_path):
     rows = db.list_audit_events()
     assert rows[0]['event_type'] == 'pipeline.completed'
     assert rows[0]['request_id'] == 'req-1'
+
+
+def test_stale_processing_claim_can_be_reclaimed(monkeypatch, tmp_path):
+    _, db = _reload_db(monkeypatch, tmp_path)
+    db.claim_idempotency('stale-req')
+    con = db._con()
+    db._execute(con, "UPDATE idempotency_keys SET updated_at=? WHERE idem_key=?", ("2000-01-01 00:00:00", "stale-req"))
+    con.commit()
+    con.close()
+    reclaimed = db.claim_idempotency('stale-req')
+    assert reclaimed['claimed'] is True
+    assert reclaimed.get('reclaimed') is True
