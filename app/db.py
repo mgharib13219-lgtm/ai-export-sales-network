@@ -61,6 +61,22 @@ def init_db():
           payload TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           UNIQUE(domain, country), FOREIGN KEY(opportunity_id) REFERENCES opportunities(id)
         )''')
+        con.execute('''CREATE TABLE IF NOT EXISTS audit_events (
+          id BIGSERIAL PRIMARY KEY, event_type TEXT NOT NULL, actor TEXT, request_id TEXT,
+          entity_type TEXT, entity_id TEXT, payload TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )''')
+        con.execute('''CREATE TABLE IF NOT EXISTS idempotency_keys (
+          id BIGSERIAL PRIMARY KEY, idem_key TEXT NOT NULL UNIQUE, status TEXT NOT NULL,
+          response_payload TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )''')
+        con.execute('''CREATE TABLE IF NOT EXISTS audit_events (
+          id INTEGER PRIMARY KEY AUTOINCREMENT, event_type TEXT NOT NULL, actor TEXT, request_id TEXT,
+          entity_type TEXT, entity_id TEXT, payload TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )''')
+        con.execute('''CREATE TABLE IF NOT EXISTS idempotency_keys (
+          id INTEGER PRIMARY KEY AUTOINCREMENT, idem_key TEXT NOT NULL UNIQUE, status TEXT NOT NULL,
+          response_payload TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )''')
         con.execute('''CREATE TABLE IF NOT EXISTS activities (
           id BIGSERIAL PRIMARY KEY, lead_id BIGINT, kind TEXT, subject TEXT,
           body TEXT, status TEXT DEFAULT 'draft', occurred_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -85,6 +101,50 @@ def init_db():
           FOREIGN KEY(lead_id) REFERENCES leads(id)
         )''')
     con.commit(); con.close()
+
+
+def claim_idempotency(idem_key):
+    if not idem_key or len(idem_key) > 200:
+        raise ValueError('invalid_idempotency_key')
+    con = _con()
+    try:
+        try:
+            _execute(con, 'INSERT INTO idempotency_keys(idem_key,status) VALUES(?,?)', (idem_key,'processing'))
+            con.commit()
+            return {'claimed': True, 'status': 'processing', 'payload': None}
+        except Exception:
+            con.rollback()
+            row = _execute(con, 'SELECT status,response_payload FROM idempotency_keys WHERE idem_key=?', (idem_key,)).fetchone()
+            if not row:
+                raise
+            return {'claimed': False, 'status': row['status'], 'payload': json.loads(row['response_payload']) if row['response_payload'] else None}
+    finally:
+        con.close()
+
+def complete_idempotency(idem_key, payload):
+    con=_con()
+    _execute(con, 'UPDATE idempotency_keys SET status=?,response_payload=?,updated_at=CURRENT_TIMESTAMP WHERE idem_key=?',
+             ('completed',json.dumps(payload,ensure_ascii=False,default=str),idem_key))
+    con.commit(); con.close()
+
+def fail_idempotency(idem_key, payload):
+    con=_con()
+    _execute(con, 'UPDATE idempotency_keys SET status=?,response_payload=?,updated_at=CURRENT_TIMESTAMP WHERE idem_key=?',
+             ('failed',json.dumps(payload,ensure_ascii=False,default=str),idem_key))
+    con.commit(); con.close()
+
+def add_audit_event(event_type, actor='', request_id='', entity_type='', entity_id='', payload=None):
+    con=_con()
+    data=json.dumps(payload or {},ensure_ascii=False,default=str)
+    _execute(con,'INSERT INTO audit_events(event_type,actor,request_id,entity_type,entity_id,payload) VALUES(?,?,?,?,?,?)',
+             (event_type,actor,request_id,entity_type,entity_id,data))
+    con.commit(); con.close()
+
+def list_audit_events(limit=100):
+    con=_con()
+    rows=_execute(con,'SELECT * FROM audit_events ORDER BY id DESC LIMIT ?',(max(1,min(limit,500)),)).fetchall()
+    con.close()
+    return [dict(r) for r in rows]
 
 def add_opportunity(row):
     con=_con()
