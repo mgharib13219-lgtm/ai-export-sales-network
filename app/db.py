@@ -70,6 +70,16 @@ def init_db():
           id BIGSERIAL PRIMARY KEY, idem_key TEXT NOT NULL UNIQUE, status TEXT NOT NULL,
           response_payload TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )''')
+        con.execute('''CREATE TABLE IF NOT EXISTS audit_events (
+          id INTEGER PRIMARY KEY AUTOINCREMENT, event_type TEXT NOT NULL, actor TEXT,
+          request_id TEXT, entity_type TEXT, entity_id TEXT, payload TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )''')
+        con.execute('''CREATE TABLE IF NOT EXISTS idempotency_keys (
+          id INTEGER PRIMARY KEY AUTOINCREMENT, idem_key TEXT NOT NULL UNIQUE, status TEXT NOT NULL,
+          response_payload TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )''')
         con.execute('''CREATE TABLE IF NOT EXISTS deals (
           id BIGSERIAL PRIMARY KEY, lead_id BIGINT NOT NULL, quote_activity_id BIGINT,
           product_name TEXT NOT NULL, buyer_company TEXT NOT NULL, country TEXT,
