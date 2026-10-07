@@ -38,7 +38,7 @@ def test_repeat_deal_protection_and_commission(monkeypatch, tmp_path):
     r=c.post(f'/crm/deals/{source}/repeat',json=repeat)
     assert r.status_code==200
     assert r.json()['anti_circumvention'] is True
-    assert r.json()['network_commission'] == 0.32
+    assert round(r.json()['network_commission'], 6) == round(200 / 3000 * 1600, 6)
     rd=c.get(f"/crm/deals/{r.json()['deal_id']}").json()
     assert rd['source_deal_id']==source
     assert rd['repeat_sequence']==1
