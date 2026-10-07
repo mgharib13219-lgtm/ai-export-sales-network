@@ -33,7 +33,7 @@ def test_repeat_deal_protection_and_commission(monkeypatch, tmp_path):
     repeat={
         'product_name':'Iranian Dates','unit':'kg','quantity':500,'currency':'USD',
         'agreed_unit_price':3.2,'incoterm':'CIF','payment_terms':'30% advance / 70% documents',
-        'factory_share':1500,'approval_confirmed':True
+        'factory_share':1490,'approval_confirmed':True
     }
     r=c.post(f'/crm/deals/{source}/repeat',json=repeat)
     assert r.status_code==200
