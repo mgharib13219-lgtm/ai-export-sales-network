@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, Depends, HTTPException, Header, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
@@ -12,6 +13,7 @@ from agents.rfq import RFQAgent
 from agents.quote import QuoteAgent
 from agents.negotiation import NegotiationAgent
 from app.rate_limit import pipeline_limiter
+from agents.repeat_deal import RepeatDealEngine
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -63,6 +65,20 @@ class DealCreate(BaseModel):
     network_commission: float = Field(ge=0)
     quote_activity_id: Optional[int] = None
     approval_confirmed: bool = False
+class RepeatDealCreate(BaseModel):
+    product_name: str = Field(min_length=2)
+    unit: str = ''
+    quantity: float = Field(gt=0)
+    currency: str = Field(min_length=3, max_length=10)
+    agreed_unit_price: float = Field(gt=0)
+    incoterm: str = Field(min_length=2)
+    payment_terms: str = Field(min_length=2)
+    factory_share: float = Field(ge=0)
+    network_commission: Optional[float] = Field(default=None, ge=0)
+    buyer_company: Optional[str] = None
+    country: Optional[str] = None
+    approval_confirmed: bool = False
+
 class ActivityCreate(BaseModel):
     kind: str = Field(min_length=2)
     subject: str = ''
@@ -253,6 +269,7 @@ def crm_create_deal(lead_id:int, data:DealCreate):
     if not data.approval_confirmed: raise HTTPException(400,'human_approval_required')
     if data.factory_share + data.network_commission > data.agreed_unit_price * data.quantity:
         raise HTTPException(400,'commercial_shares_exceed_deal_value')
+    repeat_until = datetime.now(timezone.utc) + timedelta(days=settings.repeat_protection_days)
     deal_id=create_deal({
         'lead_id':lead_id, 'quote_activity_id':data.quote_activity_id,
         'product_name':data.product_name, 'buyer_company':lead.get('company_name') or '',
@@ -260,7 +277,10 @@ def crm_create_deal(lead_id:int, data:DealCreate):
         'currency':data.currency, 'agreed_unit_price':data.agreed_unit_price,
         'incoterm':data.incoterm, 'payment_terms':data.payment_terms,
         'factory_share':data.factory_share, 'network_commission':data.network_commission,
-        'status':'won', 'won_reason':'human_approved_commercial_deal', 'repeat_eligible':True
+        'status':'won', 'won_reason':'human_approved_commercial_deal', 'repeat_eligible':True,
+        'repeat_until':repeat_until.isoformat(), 'repeat_sequence':0,
+        'commission_basis':data.network_commission / (data.agreed_unit_price * data.quantity),
+        'commission_currency':data.currency
     })
     update_lead(lead_id, stage='won')
     activity_id=add_activity(lead_id,'deal','Deal won',__import__('json').dumps({'deal_id':deal_id},ensure_ascii=False),'approved')
@@ -268,14 +288,60 @@ def crm_create_deal(lead_id:int, data:DealCreate):
     return {'status':'won','deal_id':deal_id,'lead_id':lead_id,'activity_id':activity_id,'repeat_eligible':True}
 
 @app.post('/crm/deals/{deal_id}/repeat', dependencies=[Depends(require_admin)])
-def crm_repeat_deal(deal_id:int):
+def crm_repeat_deal(deal_id:int, data: Optional[RepeatDealCreate] = None):
     deal=get_deal(deal_id)
     if not deal: raise HTTPException(404,'deal_not_found')
     if deal.get('status') != 'won' or not deal.get('repeat_eligible'): raise HTTPException(400,'repeat_not_eligible')
-    update_deal(deal_id,status='repeat')
-    update_lead(deal['lead_id'],stage='repeat')
-    add_audit_event('deal.repeat_activated','admin',str(deal_id),'deal',str(deal_id),{'lead_id':deal['lead_id']})
-    return {'status':'repeat','deal_id':deal_id,'lead_id':deal['lead_id']}
+    if data is None:
+        update_deal(deal_id,status='repeat')
+        update_lead(deal['lead_id'],stage='repeat')
+        add_audit_event('deal.repeat_activated','admin',str(deal_id),'deal',str(deal_id),
+                        {'lead_id':deal['lead_id'],'protection_until':deal.get('repeat_until')})
+        return {'status':'repeat','deal_id':deal_id,'lead_id':deal['lead_id'],'repeat_until':deal.get('repeat_until')}
+    if not data.approval_confirmed:
+        raise HTTPException(400,'human_approval_required')
+    lead=get_lead(deal['lead_id'])
+    if not lead: raise HTTPException(404,'lead_not_found')
+    engine=RepeatDealEngine(settings.repeat_protection_days)
+    policy=engine.evaluate(deal,lead,data.product_name,data.buyer_company,data.country)
+    if not policy['protected']:
+        raise HTTPException(409, {'error':'repeat_protection_not_active','policy':policy})
+    commission=engine.commission(deal,data.quantity,data.agreed_unit_price,data.network_commission)
+    total=data.quantity * data.agreed_unit_price
+    if data.factory_share + commission['network_commission'] > total:
+        raise HTTPException(400,'commercial_shares_exceed_deal_value')
+    existing=list_deals(lead_id=deal['lead_id'])
+    sequence=max([int(x.get('repeat_sequence') or 0) for x in existing] + [0]) + 1
+    new_id=create_deal({
+        'lead_id':lead['id'],'product_name':data.product_name,
+        'buyer_company':data.buyer_company or lead.get('company_name') or '',
+        'country':data.country or lead.get('country'),'unit':data.unit,
+        'quantity':data.quantity,'currency':data.currency,
+        'agreed_unit_price':data.agreed_unit_price,'incoterm':data.incoterm,
+        'payment_terms':data.payment_terms,'factory_share':data.factory_share,
+        'network_commission':commission['network_commission'],'status':'won',
+        'won_reason':'human_approved_repeat_deal','repeat_eligible':True,
+        'repeat_until':deal.get('repeat_until'),'source_deal_id':deal_id,
+        'repeat_sequence':sequence,'commission_basis':commission['commission_basis'],
+        'commission_currency':commission['commission_currency']
+    })
+    activity_id=add_activity(lead['id'],'repeat_deal','Repeat deal won',
+        __import__('json').dumps({'deal_id':new_id,'source_deal_id':deal_id,'policy':policy,'commission':commission},ensure_ascii=False),'approved')
+    add_audit_event('deal.repeat_won','admin',str(new_id),'deal',str(new_id),
+                    {'source_deal_id':deal_id,'lead_id':lead['id'],'human_approved':True,
+                     'anti_circumvention':True,'commission':commission})
+    return {'status':'won','deal_id':new_id,'source_deal_id':deal_id,'lead_id':lead['id'],
+            'repeat_sequence':sequence,'repeat_until':deal.get('repeat_until'),
+            'anti_circumvention':True,'network_commission':commission['network_commission'],
+            'commission_basis':commission['commission_basis'],'activity_id':activity_id}
+
+@app.get('/crm/deals/{deal_id}/repeat-policy', dependencies=[Depends(require_admin)])
+def crm_repeat_policy(deal_id:int, product_name:str, buyer_company:Optional[str]=None, country:Optional[str]=None):
+    deal=get_deal(deal_id)
+    if not deal: raise HTTPException(404,'deal_not_found')
+    lead=get_lead(deal['lead_id'])
+    if not lead: raise HTTPException(404,'lead_not_found')
+    return RepeatDealEngine(settings.repeat_protection_days).evaluate(deal,lead,product_name,buyer_company,country)
 
 @app.post('/crm/leads/{lead_id}/negotiation-review', dependencies=[Depends(require_admin)])
 def crm_negotiation_review(lead_id:int, data:CounterOffer):
