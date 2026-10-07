@@ -289,7 +289,8 @@ def create_deal(row):
         row.get('agreed_unit_price'),row.get('incoterm'),row.get('payment_terms'),
         row.get('factory_share'),row.get('network_commission'),row.get('status','open'),
         row.get('won_reason'),row.get('lost_reason'),row.get('repeat_eligible',True),
-        row.get('repeat_until')
+        row.get('repeat_until'),row.get('source_deal_id'),row.get('repeat_sequence',0),
+        row.get('commission_basis'),row.get('commission_currency')
     ))
     rid=cur.fetchone()['id'] if _is_postgres() else cur.lastrowid
     con.commit(); con.close(); return rid
