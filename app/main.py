@@ -179,7 +179,9 @@ def crm_update_lead(lead_id:int, data:LeadUpdate):
         raise HTTPException(400,'invalid_current_stage')
     if data.stage and current['stage'] == 'rfq' and data.stage not in ('rfq','negotiation'):
         raise HTTPException(400,'invalid_deal_transition')
-    if data.stage and current['stage'] == 'negotiation' and data.stage not in ('negotiation','won','lost'):
+    if data.stage and current['stage'] == 'negotiation' and data.stage == 'won':
+        raise HTTPException(400,'deal_creation_requires_human_approval')
+    if data.stage and current['stage'] == 'negotiation' and data.stage not in ('negotiation','lost'):
         raise HTTPException(400,'invalid_deal_transition')
     if data.stage and current['stage'] == 'won' and data.stage != 'repeat':
         raise HTTPException(400,'invalid_deal_transition')
@@ -293,7 +295,7 @@ def crm_repeat_deal(deal_id:int, data: Optional[RepeatDealCreate] = None):
     if not deal: raise HTTPException(404,'deal_not_found')
     if deal.get('status') != 'won' or not deal.get('repeat_eligible'): raise HTTPException(400,'repeat_not_eligible')
     if data is None:
-        update_deal(deal_id,status='repeat')
+        raise HTTPException(400,'human_approval_required')
         update_lead(deal['lead_id'],stage='repeat')
         add_audit_event('deal.repeat_activated','admin',str(deal_id),'deal',str(deal_id),
                         {'lead_id':deal['lead_id'],'protection_until':deal.get('repeat_until')})
