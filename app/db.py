@@ -141,7 +141,10 @@ def init_db():
     ):
         if not _column_exists(con, 'deals', column):
             _execute(con, f'ALTER TABLE deals ADD COLUMN {column} {ddl}')
-    con.commit()\n    con.close()\n\ndef claim_idempotency(idem_key):
+    con.commit()
+    con.close()
+
+def claim_idempotency(idem_key):
     if not idem_key or len(idem_key) > 200:
         raise ValueError('invalid_idempotency_key')
     con = _con()
