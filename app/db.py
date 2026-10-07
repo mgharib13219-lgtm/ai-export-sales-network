@@ -47,6 +47,13 @@ def _execute(con, sql, params=()):
         sql = sql.replace('?', '%s')
     return con.execute(sql, params)
 
+def _column_exists(con, table, column):
+    if _is_postgres():
+        row=_execute(con, "SELECT 1 FROM information_schema.columns WHERE table_name=? AND column_name=?", (table,column)).fetchone()
+        return bool(row)
+    rows=con.execute("PRAGMA table_info(" + table + ")").fetchall()
+    return any(row[1] == column for row in rows)
+
 def init_db():
     con=_con()
     if _is_postgres():
@@ -128,7 +135,13 @@ def init_db():
           FOREIGN KEY(lead_id) REFERENCES leads(id), FOREIGN KEY(quote_activity_id) REFERENCES activities(id)
         )''')
     # Backward-compatible schema evolution for existing installations.
-    for column, ddl in ((\n        ('source_deal_id', 'BIGINT'), ('repeat_sequence', 'INTEGER'),\n        ('commission_basis', 'DOUBLE PRECISION'), ('commission_currency', 'TEXT'),\n    )):\n        try:\n            _execute(con, f'ALTER TABLE deals ADD COLUMN {column} {ddl}')\n        except Exception:\n            con.rollback()\n    con.commit()\n    con.close()\n\ndef claim_idempotency(idem_key):
+    for column, ddl in (
+        ('source_deal_id', 'BIGINT'), ('repeat_sequence', 'INTEGER'),
+        ('commission_basis', 'DOUBLE PRECISION'), ('commission_currency', 'TEXT'),
+    ):
+        if not _column_exists(con, 'deals', column):
+            _execute(con, f'ALTER TABLE deals ADD COLUMN {column} {ddl}')
+    con.commit()\n    con.close()\n\ndef claim_idempotency(idem_key):
     if not idem_key or len(idem_key) > 200:
         raise ValueError('invalid_idempotency_key')
     con = _con()
