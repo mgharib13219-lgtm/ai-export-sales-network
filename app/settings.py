@@ -22,5 +22,6 @@ class Settings:
     smtp_port: int = int(os.getenv('SMTP_PORT', '587'))
     smtp_user: str = os.getenv('SMTP_USER', '')
     smtp_password: str = os.getenv('SMTP_PASSWORD', '')
+    repeat_protection_days: int = int(os.getenv('REPEAT_PROTECTION_DAYS', '1095'))
 
 settings = Settings()
