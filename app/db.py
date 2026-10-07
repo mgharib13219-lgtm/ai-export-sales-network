@@ -155,7 +155,7 @@ def claim_idempotency(idem_key):
             return {'claimed': True, 'status': 'processing', 'payload': None}
         except Exception:
             con.rollback()
-            row = _execute(con, 'SELECT status,response_payload FROM idempotency_keys WHERE idem_key=?', (idem_key,)).fetchone()
+            row = _execute(con, 'SELECT status,response_payload,updated_at FROM idempotency_keys WHERE idem_key=?', (idem_key,)).fetchone()
             if not row:
                 raise
             status = row['status']
