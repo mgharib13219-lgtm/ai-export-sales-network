@@ -23,5 +23,11 @@ def test_rfq_to_negotiation_to_won_to_repeat(monkeypatch,tmp_path):
     c=TestClient(app)
     assert c.patch(f'/crm/leads/{lid}',json={'stage':'rfq'}).status_code==200
     assert c.patch(f'/crm/leads/{lid}',json={'stage':'negotiation'}).status_code==200
-    assert c.patch(f'/crm/leads/{lid}',json={'stage':'won'}).status_code==200
+    assert c.patch(f'/crm/leads/{lid}',json={'stage':'won'}).status_code==400
+    deal = c.post(f'/crm/leads/{lid}/deal', json={
+        'product_name':'Iranian Dates','unit':'kg','quantity':1000,'currency':'USD',
+        'agreed_unit_price':3.0,'incoterm':'CIF','payment_terms':'TBD',
+        'factory_share':2800,'network_commission':200,'approval_confirmed':True
+    })
+    assert deal.status_code == 200
     assert c.patch(f'/crm/leads/{lid}',json={'stage':'repeat'}).status_code==200
