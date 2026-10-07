@@ -83,6 +83,7 @@ def init_db():
           factory_share DOUBLE PRECISION, network_commission DOUBLE PRECISION,
           status TEXT DEFAULT 'open', won_reason TEXT, lost_reason TEXT,
           repeat_eligible BOOLEAN DEFAULT TRUE, repeat_until TIMESTAMP,
+          source_deal_id BIGINT, repeat_sequence INTEGER DEFAULT 0, commission_basis DOUBLE PRECISION, commission_currency TEXT,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY(lead_id) REFERENCES leads(id), FOREIGN KEY(quote_activity_id) REFERENCES activities(id)
         )''')
@@ -122,13 +123,11 @@ def init_db():
           factory_share REAL, network_commission REAL,
           status TEXT DEFAULT 'open', won_reason TEXT, lost_reason TEXT,
           repeat_eligible INTEGER DEFAULT 1, repeat_until DATETIME,
+          source_deal_id INTEGER, repeat_sequence INTEGER DEFAULT 0, commission_basis REAL, commission_currency TEXT,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY(lead_id) REFERENCES leads(id), FOREIGN KEY(quote_activity_id) REFERENCES activities(id)
         )''')
-    con.commit()
-    con.close()
-
-def claim_idempotency(idem_key):
+    # Backward-compatible schema evolution for existing installations.\n    for column, ddl in ((\n        ('source_deal_id', 'BIGINT'), ('repeat_sequence', 'INTEGER'),\n        ('commission_basis', 'DOUBLE PRECISION'), ('commission_currency', 'TEXT'),\n    )):\n        try:\n            _execute(con, f'ALTER TABLE deals ADD COLUMN {column} {ddl}')\n        except Exception:\n            con.rollback()\n    con.commit()\n    con.close()\n\ndef claim_idempotency(idem_key):
     if not idem_key or len(idem_key) > 200:
         raise ValueError('invalid_idempotency_key')
     con = _con()
@@ -267,8 +266,8 @@ def create_deal(row):
     insert_sql='''INSERT INTO deals(
       lead_id,quote_activity_id,product_name,buyer_company,country,unit,quantity,currency,
       agreed_unit_price,incoterm,payment_terms,factory_share,network_commission,
-      status,won_reason,lost_reason,repeat_eligible,repeat_until
-    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'''
+      status,won_reason,lost_reason,repeat_eligible,repeat_until,source_deal_id,repeat_sequence,commission_basis,commission_currency
+    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'''
     if _is_postgres(): insert_sql += ' RETURNING id'
     cur=_execute(con,insert_sql,(
         row['lead_id'],row.get('quote_activity_id'),row['product_name'],row['buyer_company'],
