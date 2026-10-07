@@ -127,7 +127,8 @@ def init_db():
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY(lead_id) REFERENCES leads(id), FOREIGN KEY(quote_activity_id) REFERENCES activities(id)
         )''')
-    # Backward-compatible schema evolution for existing installations.\n    for column, ddl in ((\n        ('source_deal_id', 'BIGINT'), ('repeat_sequence', 'INTEGER'),\n        ('commission_basis', 'DOUBLE PRECISION'), ('commission_currency', 'TEXT'),\n    )):\n        try:\n            _execute(con, f'ALTER TABLE deals ADD COLUMN {column} {ddl}')\n        except Exception:\n            con.rollback()\n    con.commit()\n    con.close()\n\ndef claim_idempotency(idem_key):
+    # Backward-compatible schema evolution for existing installations.
+    for column, ddl in ((\n        ('source_deal_id', 'BIGINT'), ('repeat_sequence', 'INTEGER'),\n        ('commission_basis', 'DOUBLE PRECISION'), ('commission_currency', 'TEXT'),\n    )):\n        try:\n            _execute(con, f'ALTER TABLE deals ADD COLUMN {column} {ddl}')\n        except Exception:\n            con.rollback()\n    con.commit()\n    con.close()\n\ndef claim_idempotency(idem_key):
     if not idem_key or len(idem_key) > 200:
         raise ValueError('invalid_idempotency_key')
     con = _con()
