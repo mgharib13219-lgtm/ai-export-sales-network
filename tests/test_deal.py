@@ -18,5 +18,6 @@ def test_human_approved_deal_and_repeat(monkeypatch, tmp_path):
     deal_id = r.json()['deal_id']
     deal = c.get(f'/crm/deals/{deal_id}')
     assert deal.status_code == 200 and deal.json()['network_commission'] == 200
-    assert c.post(f'/crm/deals/{deal_id}/repeat').status_code == 200
-    assert c.get(f'/crm/leads/{lid}').json()['stage'] == 'repeat'
+    # A repeat order must be a separate, human-approved deal record.
+    assert c.post(f'/crm/deals/{deal_id}/repeat').status_code == 400
+    assert c.get(f'/crm/leads/{lid}').json()['stage'] == 'won'
