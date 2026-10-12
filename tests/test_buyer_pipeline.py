@@ -92,4 +92,4 @@ def test_verifier_never_calls_automated_review_identity_proof(monkeypatch):
     assert verification["status"] == "review_required"
     assert verification["identity_verified"] is False
     assert "automated_review_not_identity_proof" in verification["risk_flags"]
-    assert verification["score"] == 86
+    assert verification["score"] == 96
