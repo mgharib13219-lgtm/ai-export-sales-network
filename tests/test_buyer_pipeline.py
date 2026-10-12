@@ -7,7 +7,7 @@ def test_verification_without_url():
     assert result["verification"]["score"] == 0
     assert "no_url" in result["verification"]["risk_flags"]
     assert result["verification"]["status"] == "pending"
-    assert result["verification"]["identity_verified"] if "identity_verified" in result["verification"] else True
+    assert result["verification"]["identity_verified"] is False
 
 
 def test_match_uses_verification_score(monkeypatch):
