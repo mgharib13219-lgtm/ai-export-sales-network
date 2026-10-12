@@ -298,6 +298,8 @@ def crm_repeat_deal(deal_id:int, data: Optional[RepeatDealCreate] = None):
         raise HTTPException(400,'human_approval_required')
     if not data.approval_confirmed:
         raise HTTPException(400,'human_approval_required')
+    if data.currency.upper() != str(deal.get('currency') or '').upper():
+        raise HTTPException(400,'repeat_currency_must_match_source_deal')
     lead=get_lead(deal['lead_id'])
     if not lead: raise HTTPException(404,'lead_not_found')
     engine=RepeatDealEngine(settings.repeat_protection_days)
