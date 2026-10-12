@@ -296,10 +296,6 @@ def crm_repeat_deal(deal_id:int, data: Optional[RepeatDealCreate] = None):
     if deal.get('status') != 'won' or not deal.get('repeat_eligible'): raise HTTPException(400,'repeat_not_eligible')
     if data is None:
         raise HTTPException(400,'human_approval_required')
-        update_lead(deal['lead_id'],stage='repeat')
-        add_audit_event('deal.repeat_activated','admin',str(deal_id),'deal',str(deal_id),
-                        {'lead_id':deal['lead_id'],'protection_until':deal.get('repeat_until')})
-        return {'status':'repeat','deal_id':deal_id,'lead_id':deal['lead_id'],'repeat_until':deal.get('repeat_until')}
     if not data.approval_confirmed:
         raise HTTPException(400,'human_approval_required')
     lead=get_lead(deal['lead_id'])
