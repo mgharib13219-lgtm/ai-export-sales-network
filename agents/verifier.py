@@ -40,6 +40,21 @@ class VerificationAgent:
                 flags.append("email_domain_mismatch")
         return flags
 
+    def _next_action(self, status, risk_flags, contacts):
+        if status == "site_unreachable":
+            return "confirm_company_website"
+        if status == "ai_review_unavailable":
+            return "configure_ai_provider_then_recheck"
+        if status == "ai_review_error":
+            return "retry_ai_review"
+        if status == "insufficient_evidence":
+            return "collect_more_public_company_evidence"
+        if "email_domain_mismatch" in risk_flags or "free_email_provider" in risk_flags:
+            return "manually_check_email_domain"
+        if not contacts.get("emails") and not contacts.get("phones"):
+            return "find_and_confirm_business_contact"
+        return "human_review_public_evidence"
+
     def run(self, buyers):
         out = []
         for buyer in buyers:
@@ -53,6 +68,7 @@ class VerificationAgent:
                         "evidence_sources": [],
                         "decision": "human_review_required",
                         "identity_verified": False,
+                        "recommended_next_action": "find_official_company_website",
                     },
                 })
                 continue
@@ -117,6 +133,7 @@ class VerificationAgent:
                     "analysis": analysis,
                     "decision": "human_review_required",
                     "identity_verified": False,
+                    "recommended_next_action": self._next_action(status, risk_flags, contacts),
                 },
             })
         return out
