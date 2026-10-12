@@ -31,6 +31,13 @@ def test_rfq_to_negotiation_to_won_to_repeat(monkeypatch,tmp_path):
     assert deal.status_code == 200
     source_id=deal.json()['deal_id']
     assert c.patch(f'/crm/leads/{lid}',json={'stage':'repeat'}).status_code==400
+    currency_mismatch = c.post(f'/crm/deals/{source_id}/repeat', json={
+        'product_name':'Iranian Dates','unit':'kg','quantity':1000,'currency':'EUR',
+        'agreed_unit_price':2.9,'incoterm':'CIF','payment_terms':'TBD',
+        'factory_share':2500,'network_commission':None,'buyer_company':'Buyer Co',
+        'country':'Oman','approval_confirmed':True
+    })
+    assert currency_mismatch.status_code == 400
     repeat = c.post(f'/crm/deals/{source_id}/repeat', json={
         'product_name':'Iranian Dates','unit':'kg','quantity':1000,'currency':'USD',
         'agreed_unit_price':2.9,'incoterm':'CIF','payment_terms':'TBD',
