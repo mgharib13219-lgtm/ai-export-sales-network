@@ -93,3 +93,44 @@ def test_verifier_never_calls_automated_review_identity_proof(monkeypatch):
     assert verification["identity_verified"] is False
     assert "automated_review_not_identity_proof" in verification["risk_flags"]
     assert verification["score"] == 96
+
+
+
+def test_verifier_flags_free_email_and_domain_mismatch_without_claiming_identity(monkeypatch):
+    import agents.verifier as module
+
+    monkeypatch.setattr(module, "contact_extractor", type("Extractor", (), {
+        "extract": lambda self, url: {
+            "website": {"reachable": True, "final_url": url, "status_code": 200},
+            "contact": {
+                "emails": ["sales@gmail.com", "orders@unrelated-example.net"],
+                "phones": [], "contact_pages": [],
+            },
+            "buyer_signals": ["importer"],
+        }
+    })())
+    monkeypatch.setattr(module, "ai_provider", type("AI", (), {
+        "analyze": lambda self, task, payload: {
+            "status": "ok",
+            "parsed": {"company_name": "Example Buyer", "score": 75, "risk_flags": [], "evidence": []},
+        }
+    })())
+
+    result = module.VerificationAgent().run([
+        {"title": "Example Buyer", "url": "https://buyer.example.org"}
+    ])[0]["verification"]
+
+    assert "free_email_provider" in result["risk_flags"]
+    assert "email_domain_mismatch" in result["risk_flags"]
+    assert result["identity_verified"] is False
+    assert result["decision"] == "human_review_required"
+
+
+def test_verifier_does_not_flag_matching_company_email_domain(monkeypatch):
+    import agents.verifier as module
+
+    agent = module.VerificationAgent()
+    assert agent._contact_risk_flags({
+        "url": "https://buyer.example.org",
+        "contact": {"emails": ["sales@buyer.example.org", "info@example.org"]},
+    }) == []
