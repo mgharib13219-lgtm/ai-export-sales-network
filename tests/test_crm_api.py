@@ -29,4 +29,18 @@ def test_rfq_to_negotiation_to_won_to_repeat(monkeypatch,tmp_path):
         'factory_share':2800,'network_commission':200,'approval_confirmed':True
     })
     assert deal.status_code == 200
-    assert c.patch(f'/crm/leads/{lid}',json={'stage':'repeat'}).status_code==200
+    source_id=deal.json()['deal_id']
+    assert c.patch(f'/crm/leads/{lid}',json={'stage':'repeat'}).status_code==400
+    repeat = c.post(f'/crm/deals/{source_id}/repeat', json={
+        'product_name':'Iranian Dates','unit':'kg','quantity':1000,'currency':'USD',
+        'agreed_unit_price':2.9,'incoterm':'CIF','payment_terms':'TBD',
+        'factory_share':2500,'network_commission':None,'buyer_company':'Buyer Co',
+        'country':'Oman','approval_confirmed':True
+    })
+    assert repeat.status_code == 200, repeat.text
+    body=repeat.json()
+    assert body['source_deal_id']==source_id
+    assert body['repeat_sequence']==1
+    assert body['anti_circumvention'] is True
+    assert body['network_commission'] > 0
+    assert len(c.get('/crm/deals').json()) == 2
