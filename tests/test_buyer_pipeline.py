@@ -134,3 +134,22 @@ def test_verifier_does_not_flag_matching_company_email_domain(monkeypatch):
         "url": "https://buyer.example.org",
         "contact": {"emails": ["sales@buyer.example.org", "info@example.org"]},
     }) == []
+
+
+
+def test_verifier_recommends_manual_check_for_risky_email_domain():
+    from agents.verifier import VerificationAgent
+
+    action = VerificationAgent()._next_action(
+        "review_required", ["email_domain_mismatch"], {"emails": ["sales@other.test"], "phones": []}
+    )
+    assert action == "manually_check_email_domain"
+
+
+def test_verifier_recommends_contact_discovery_when_no_business_contact():
+    from agents.verifier import VerificationAgent
+
+    action = VerificationAgent()._next_action(
+        "review_required", [], {"emails": [], "phones": []}
+    )
+    assert action == "find_and_confirm_business_contact"
