@@ -1,4 +1,12 @@
+from urllib.parse import urlparse
+
 from app.providers import ai_provider, contact_extractor
+
+
+FREE_EMAIL_DOMAINS = {
+    "gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "live.com",
+    "icloud.com", "aol.com", "proton.me", "protonmail.com", "gmx.com",
+}
 
 
 class VerificationAgent:
@@ -14,6 +22,23 @@ class VerificationAgent:
         evidence += 10 if buyer.get("buyer_signals") else 0
         ai_score = parsed.get("score") if isinstance(parsed.get("score"), (int, float)) else 0
         return max(0, min(100, round(evidence + ai_score * 0.4)))
+
+    def _contact_risk_flags(self, buyer):
+        flags = []
+        host = urlparse(buyer.get("url") or "").hostname
+        if not host:
+            return flags
+        host = host.lower().removeprefix("www.")
+        emails = buyer.get("contact", {}).get("emails", [])
+        for email in emails:
+            if not isinstance(email, str) or "@" not in email:
+                continue
+            email_domain = email.rsplit("@", 1)[1].strip().lower().rstrip(".")
+            if email_domain in FREE_EMAIL_DOMAINS:
+                flags.append("free_email_provider")
+            elif email_domain != host and not host.endswith("." + email_domain) and not email_domain.endswith("." + host):
+                flags.append("email_domain_mismatch")
+        return flags
 
     def run(self, buyers):
         out = []
@@ -45,6 +70,7 @@ class VerificationAgent:
             score = self._score(enriched, analysis)
             parsed = (analysis or {}).get("parsed") or {}
             risk_flags = list(parsed.get("risk_flags") or [])
+            risk_flags.extend(self._contact_risk_flags(enriched))
 
             if not website.get("reachable"):
                 status = "site_unreachable"
