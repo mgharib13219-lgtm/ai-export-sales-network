@@ -153,3 +153,28 @@ def test_verifier_recommends_contact_discovery_when_no_business_contact():
         "review_required", [], {"emails": [], "phones": []}
     )
     assert action == "find_and_confirm_business_contact"
+
+
+
+def test_outreach_draft_carries_verification_risks_and_never_claims_identity(monkeypatch):
+    import agents.outreach as module
+
+    monkeypatch.setattr(module, "ai_provider", type("AI", (), {
+        "analyze": lambda self, task, payload: {"status": "ok", "parsed": {"subject": "Inquiry", "body": "Draft"}}
+    })())
+    result = module.OutreachAgent().run({}, [{
+        "title": "Candidate Buyer",
+        "market": "Oman",
+        "contact": {"emails": ["sales@example.org"]},
+        "verification": {
+            "status": "review_required", "score": 65,
+            "risk_flags": ["email_domain_mismatch"],
+            "recommended_next_action": "manually_check_email_domain",
+        },
+    }])[0]
+
+    assert result["status"] == "draft_only"
+    assert result["approval_required"] is True
+    assert result["identity_verified"] is False
+    assert "email_domain_mismatch" in result["risk_flags"]
+    assert result["recommended_next_action"] == "manually_check_email_domain"
