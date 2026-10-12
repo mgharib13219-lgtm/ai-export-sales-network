@@ -27,6 +27,7 @@ class VerificationAgent:
                         "risk_flags": ["no_url"],
                         "evidence_sources": [],
                         "decision": "human_review_required",
+                        "identity_verified": False,
                     },
                 })
                 continue
