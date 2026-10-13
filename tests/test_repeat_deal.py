@@ -113,3 +113,31 @@ def test_repeat_deal_rejects_different_buyer(monkeypatch, tmp_path):
     assert repeat.status_code == 409
     assert repeat.json()['detail']['policy']['identity_match'] is False
     assert len(db.list_deals(lead_id=lid)) == 1
+
+
+def test_repeat_deal_rejects_expired_protection(monkeypatch, tmp_path):
+    from datetime import datetime, timedelta, timezone
+
+    monkeypatch.setattr(db, 'DB_PATH', tmp_path / 'repeat_expired.db')
+    db.DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    db.init_db()
+    c = TestClient(app)
+    lid = _lead()
+    _move_to_negotiation(c, lid)
+    won = c.post(f'/crm/leads/{lid}/deal', json={
+        'product_name':'Iranian Dates','unit':'kg','quantity':1000,
+        'currency':'USD','agreed_unit_price':3,'incoterm':'CIF',
+        'payment_terms':'TBD','factory_share':2800,'network_commission':200,
+        'approval_confirmed':True
+    })
+    assert won.status_code == 200
+    source_id = won.json()['deal_id']
+    db.update_deal(source_id, repeat_until=(datetime.now(timezone.utc)-timedelta(days=1)).isoformat())
+    repeat = c.post(f'/crm/deals/{source_id}/repeat', json={
+        'product_name':'Iranian Dates','unit':'kg','quantity':100,
+        'currency':'USD','agreed_unit_price':3,'incoterm':'CIF',
+        'payment_terms':'TBD','factory_share':280,'approval_confirmed':True
+    })
+    assert repeat.status_code == 409
+    assert repeat.json()['detail']['policy']['protected'] is False
+    assert len(db.list_deals(lead_id=lid)) == 1
