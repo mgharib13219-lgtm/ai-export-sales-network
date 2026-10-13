@@ -51,12 +51,13 @@ def test_email_remains_draft_only_even_with_provider_credentials(monkeypatch):
         ai_api_key="test-ai-key",
         email_provider="resend",
         email_api_key="test-email-key",
+        smtp_host="", smtp_user="", smtp_password="",
     ))
 
     result = main.integration_status()
 
     assert result["email"]["configured"] is False
     assert result["email"]["status"] == "draft_only"
-    assert result["email"]["credentials_configured"] is True
-    assert "not implemented" in result["email"]["next_action"]
+    assert result["email"]["credentials_configured"] is False
+    assert "SMTP_HOST" in result["email"]["next_action"]
     assert "test-email-key" not in str(result)
