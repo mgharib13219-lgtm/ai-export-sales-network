@@ -329,7 +329,8 @@ def crm_create_deal(lead_id:int, data:DealCreate):
     if not data.approval_confirmed: raise HTTPException(400,'human_approval_required')
     if data.factory_share + data.network_commission > data.agreed_unit_price * data.quantity:
         raise HTTPException(400,'commercial_shares_exceed_deal_value')
-    repeat_until = datetime.now(timezone.utc) + timedelta(days=settings.repeat_protection_days)
+    protection_days = max(1, int(settings.repeat_protection_days))
+    repeat_until = datetime.now(timezone.utc) + timedelta(days=protection_days)
     deal_id=create_deal({
         'lead_id':lead_id, 'quote_activity_id':data.quote_activity_id,
         'product_name':data.product_name, 'buyer_company':lead.get('company_name') or '',
