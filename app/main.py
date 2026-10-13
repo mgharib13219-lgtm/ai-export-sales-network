@@ -101,7 +101,7 @@ def ready():
 def integration_status():
     search_configured = settings.search_provider == 'serpapi' and bool(settings.search_api_key)
     ai_configured = settings.ai_provider == 'openai' and bool(settings.ai_api_key)
-    email_configured = (settings.email_provider or '').lower() == 'smtp' and all((settings.smtp_host, settings.smtp_user, settings.smtp_password))
+    email_configured = (settings.email_provider or '').lower() == 'smtp' and all((getattr(settings, 'smtp_host', ''), getattr(settings, 'smtp_user', ''), getattr(settings, 'smtp_password', '')))
     return {
         'status': 'ready' if search_configured else 'action_required',
         'search': {
