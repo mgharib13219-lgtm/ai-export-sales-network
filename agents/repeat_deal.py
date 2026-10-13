@@ -57,6 +57,10 @@ class RepeatDealEngine:
         source_commission = float(source_deal.get("network_commission") or 0)
         if source_commission < 0 or source_total < 0:
             raise ValueError("source_commission_and_total_must_not_be_negative")
+        if source_commission > source_total:
+            raise ValueError("source_commission_exceeds_source_deal_value")
+        if source_total == 0 and source_commission > 0:
+            raise ValueError("source_commission_requires_positive_source_deal_value")
         basis = (source_commission / source_total) if source_total > 0 else 0.0
         amount = float(explicit_commission) if explicit_commission is not None else round(total * basis, 6)
         if amount < 0 or amount > total:
