@@ -97,6 +97,34 @@ def ready():
     except Exception as exc:
         raise HTTPException(status_code=503, detail={'status':'not_ready','database':'error','error':str(exc)})
 
+@app.get('/system/integrations', dependencies=[Depends(require_admin)])
+def integration_status():
+    search_configured = settings.search_provider == 'serpapi' and bool(settings.search_api_key)
+    ai_configured = settings.ai_provider == 'openai' and bool(settings.ai_api_key)
+    email_configured = settings.email_provider not in ('', 'none') and bool(settings.email_api_key)
+    return {
+        'status': 'ready' if search_configured else 'action_required',
+        'search': {
+            'provider': settings.search_provider or 'none',
+            'configured': search_configured,
+            'status': 'configured' if search_configured else 'provider_not_configured',
+            'next_action': None if search_configured else 'Set SEARCH_PROVIDER=serpapi and add SEARCH_API_KEY in the deployment environment.'
+        },
+        'ai': {
+            'provider': settings.ai_provider or 'none',
+            'configured': ai_configured,
+            'status': 'configured' if ai_configured else 'not_configured',
+            'next_action': None if ai_configured else 'Set AI_PROVIDER=openai and add AI_API_KEY to enable AI analysis.'
+        },
+        'email': {
+            'provider': settings.email_provider or 'none',
+            'configured': email_configured,
+            'status': 'configured' if email_configured else 'draft_only',
+            'next_action': None if email_configured else 'Email delivery is not configured; outreach remains draft-only.'
+        },
+        'secrets_exposed': False
+    }
+
 @app.get('/', response_class=HTMLResponse)
 def dashboard():
     return '''<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AI Export Sales Network</title><style>body{font-family:system-ui,Arial;max-width:1150px;margin:auto;padding:18px;background:#f5f7fa;color:#17202a}section{background:white;padding:18px;border-radius:16px;margin:12px 0;box-shadow:0 2px 12px #0001}input,textarea,button,select{width:100%;box-sizing:border-box;padding:11px;margin:5px 0;border:1px solid #ddd;border-radius:10px}button{background:#111;color:#fff;cursor:pointer}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}.card{padding:12px;border:1px solid #eee;border-radius:12px;background:#fff}.num{font-size:26px;font-weight:700}.muted{color:#667085}.pill{display:inline-block;padding:4px 8px;border-radius:99px;background:#eef2ff;margin:2px}.row{display:flex;gap:8px;align-items:center}.row>*{flex:1}.small{font-size:12px}</style></head><body><h1>AI Export Sales Network</h1><p class="muted">داشبورد عملیاتی جذب خریدار خارجی — v1.0</p><section><h2>CRM</h2><div id="stats" class="cards"></div><div class="grid"><select id="stage"><option value="">همه مراحل</option><option>discovered</option><option>verified</option><option>matched</option><option>contacted</option><option>replied</option><option>rfq</option><option>negotiation</option><option>won</option><option>lost</option><option>repeat</option></select><button onclick="loadLeads()">به‌روزرسانی لیدها</button></div><div id="leads">در حال بارگذاری...</div></section><section><h2>افزودن محصول و اجرای شکار خریدار</h2><div class="grid"><input id="name" placeholder="نام محصول"><input id="price" type="number" placeholder="قیمت پایه USD"><input id="hs" placeholder="HS Code"><input id="countries" placeholder="کشورهای هدف: Oman, Turkey"></div><textarea id="desc" placeholder="مشخصات، ظرفیت، MOQ، گواهی‌ها و مزیت محصول"></textarea><button onclick="run()">اجرای Pipeline</button><pre id="out"></pre></section><script>
