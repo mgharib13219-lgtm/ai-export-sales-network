@@ -6,11 +6,11 @@ class Settings:
     app_name: str = os.getenv('APP_NAME', 'AI Export Sales Network')
     admin_token: str = os.getenv('ADMIN_TOKEN', '')
     environment: str = os.getenv('ENVIRONMENT', 'development')
-    app_version: str = os.getenv('APP_VERSION', '1.0.0')
+    app_version: str = os.getenv('APP_VERSION', '1.1.0')
     ai_provider: str = os.getenv('AI_PROVIDER', 'none')
     ai_api_key: str = os.getenv('AI_API_KEY', '')
     ai_base_url: str = os.getenv('AI_BASE_URL', '')
-    ai_model: str = os.getenv('AI_MODEL', 'gpt-5.6-luna')
+    ai_model: str = os.getenv('AI_MODEL', 'gpt-4.1-mini')
     ai_web_search: bool = os.getenv('AI_WEB_SEARCH', 'true').lower() == 'true'
     search_provider: str = os.getenv('SEARCH_PROVIDER', 'none')
     search_api_key: str = os.getenv('SEARCH_API_KEY', '')
