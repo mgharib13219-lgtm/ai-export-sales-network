@@ -63,3 +63,27 @@ def test_repeat_requires_human_approval(monkeypatch, tmp_path):
     })
     assert r.status_code==400
     assert r.json()['detail']=='human_approval_required'
+
+
+def test_invalid_repeat_window_is_clamped_to_one_day(monkeypatch, tmp_path):
+    from datetime import datetime, timezone
+    from types import SimpleNamespace
+    import app.main as main_module
+
+    monkeypatch.setattr(db, 'DB_PATH', tmp_path / 'repeat_window.db')
+    monkeypatch.setattr(main_module, 'settings', SimpleNamespace(repeat_protection_days=-10))
+    db.DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    db.init_db()
+    c = TestClient(app)
+    lid = _lead()
+    _move_to_negotiation(c, lid)
+    response = c.post(f'/crm/leads/{lid}/deal', json={
+        'product_name':'Iranian Dates','unit':'kg','quantity':100,
+        'currency':'USD','agreed_unit_price':3,'incoterm':'CIF',
+        'payment_terms':'TBD','factory_share':100,'network_commission':10,
+        'approval_confirmed':True
+    })
+    assert response.status_code == 200
+    deal = c.get(f"/crm/deals/{response.json()['deal_id']}").json()
+    deadline = datetime.fromisoformat(deal['repeat_until'].replace('Z', '+00:00'))
+    assert deadline > datetime.now(timezone.utc)
