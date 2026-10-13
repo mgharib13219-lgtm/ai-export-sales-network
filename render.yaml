@@ -16,23 +16,31 @@ services:
       - key: ADMIN_TOKEN
         sync: false
       - key: AI_PROVIDER
-        value: none
+        value: openai
       - key: AI_API_KEY
         sync: false
       - key: AI_BASE_URL
         sync: false
       - key: AI_MODEL
-        value: gpt-5.6-luna
+        value: gpt-4.1-mini
       - key: AI_WEB_SEARCH
         value: true
       - key: SEARCH_PROVIDER
-        value: none
+        value: serpapi
       - key: SEARCH_API_KEY
         sync: false
       - key: SEARCH_BASE_URL
-        sync: false
+        value: https://serpapi.com/search.json
       - key: EMAIL_PROVIDER
-        value: none
+        value: smtp
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: 587
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
       - key: DATABASE_URL
         fromDatabase:
           name: ai-export-sales-network-db
