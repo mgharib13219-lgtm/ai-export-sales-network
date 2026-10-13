@@ -8,6 +8,7 @@ from app.workflow import run_opportunity_pipeline
 from app.db import init_db, add_opportunity, list_opportunities, list_leads, get_lead, update_lead, due_followups, add_activity, list_activities, crm_stats, LEAD_STAGES, claim_idempotency, complete_idempotency, fail_idempotency, add_audit_event, list_audit_events, create_deal, get_deal, list_deals, update_deal
 from app.auth import require_admin
 from app.settings import settings
+from app.providers import email_provider
 from agents.followup import FollowUpAgent
 from agents.rfq import RFQAgent
 from agents.quote import QuoteAgent
@@ -84,6 +85,11 @@ class ActivityCreate(BaseModel):
     subject: str = ''
     body: str = ''
     status: str = 'draft'
+
+class EmailSendRequest(BaseModel):
+    subject: str = Field(min_length=2, max_length=250)
+    body: str = Field(min_length=1, max_length=20000)
+    approval_confirmed: bool = False
 
 @app.get('/health')
 def health(): return {'status':'ok','service':'ai-export-sales-network','version':settings.app_version,'environment':settings.environment}
@@ -232,6 +238,27 @@ def crm_process_followups(limit:int=50):
     for lead in due:
         results.append({'lead_id':lead['id'], **agent.create_draft(lead)})
     return {'processed':len(results),'results':results,'mode':'draft_only'}
+
+@app.post('/crm/leads/{lead_id}/send-email', dependencies=[Depends(require_admin)])
+def crm_send_email(lead_id:int, data:EmailSendRequest):
+    lead=get_lead(lead_id)
+    if not lead:
+        raise HTTPException(404,'lead_not_found')
+    if lead.get('stage') in ('won','lost','repeat'):
+        raise HTTPException(400,'terminal_stage')
+    if not data.approval_confirmed:
+        raise HTTPException(400,'human_approval_required')
+    recipient=(lead.get('email') or '').strip()
+    if '@' not in recipient or recipient.startswith('@') or recipient.endswith('@'):
+        raise HTTPException(400,'valid_buyer_email_required')
+    result=email_provider.send(recipient, data.subject, data.body)
+    activity_id=add_activity(lead_id,'outbound_email',data.subject,
+        __import__('json').dumps({'to':recipient,'body':data.body,'result':result},ensure_ascii=False),
+        result.get('status','unknown'))
+    add_audit_event('email.outbound_attempt','admin',str(lead_id),'lead',str(lead_id),
+        {'activity_id':activity_id,'to':recipient,'status':result.get('status'),
+         'human_approved':True})
+    return {**result,'activity_id':activity_id,'human_approved':True}
 
 @app.post('/crm/leads/{lead_id}/follow-up', dependencies=[Depends(require_admin)])
 def crm_followup(lead_id:int):
