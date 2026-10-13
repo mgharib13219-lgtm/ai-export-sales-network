@@ -101,8 +101,7 @@ def ready():
 def integration_status():
     search_configured = settings.search_provider == 'serpapi' and bool(settings.search_api_key)
     ai_configured = settings.ai_provider == 'openai' and bool(settings.ai_api_key)
-    # EmailProvider currently creates drafts only; credentials do not enable delivery.
-    email_configured = False
+    email_configured = (settings.email_provider or '').lower() == 'smtp' and all((settings.smtp_host, settings.smtp_user, settings.smtp_password))
     return {
         'status': 'ready' if search_configured else 'action_required',
         'search': {
@@ -119,10 +118,10 @@ def integration_status():
         },
         'email': {
             'provider': settings.email_provider or 'none',
-            'configured': email_configured,
-            'status': 'draft_only',
-            'credentials_configured': settings.email_provider not in ('', 'none') and bool(settings.email_api_key),
-            'next_action': 'Actual email delivery is not implemented; outreach remains draft-only even when provider credentials are present.'
+            'configured': bool(email_configured),
+            'status': 'configured' if email_configured else 'draft_only',
+            'credentials_configured': bool(email_configured),
+            'next_action': None if email_configured else 'Set EMAIL_PROVIDER=smtp and configure SMTP_HOST, SMTP_USER and SMTP_PASSWORD. Drafts are not sent until SMTP is configured.'
         },
         'secrets_exposed': False
     }
@@ -137,7 +136,7 @@ async function loadStats(){const r=await api('/crm/stats');if(!r.ok)return;const
 function esc(v){return String(v??'').replace(/[&<>\"']/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[s]));}\nasync function loadLeads(){const q=stage.value?`?stage=${encodeURIComponent(stage.value)}`:'';const r=await api('/crm/leads'+q);if(!r.ok){leads.textContent='برای مشاهده CRM توکن لازم است.';return}const a=await r.json();leads.innerHTML=a.map(x=>`<div class=card><b>${esc(x.company_name||'-')}</b> <span class=pill>${esc(x.stage)}</span><br><span class=small>${esc(x.country||'-')} | امتیاز ${esc(x.score||0)} | ${esc(x.email||'بدون ایمیل')}</span><br><span class=small>${esc(x.domain||'')}</span><div class=row><select onchange="changeStage(${x.id},this.value)">${['discovered','verified','matched','contacted','replied','rfq','negotiation','won','lost','repeat'].map(s=>`<option ${s===x.stage?'selected':''}>${s}</option>`).join('')}</select><button onclick="draft(${x.id})">پیش‌نویس پیگیری</button></div></div>`).join('')||'لیدی ثبت نشده است'}
 async function changeStage(id,s){await api('/crm/leads/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({stage:s})});loadStats()}
 async function draft(id){const r=await api('/crm/leads/'+id+'/follow-up',{method:'POST'});alert(JSON.stringify(await r.json(),null,2));loadStats()}
-async function loadIntegrations(){const box=document.getElementById('integrations');try{const r=await api('/system/integrations');if(!r.ok){box.textContent='برای مشاهده وضعیت اتصال‌ها، توکن مدیر لازم است.';return}const d=await r.json();const items=[['جست‌وجوی خریدار',d.search],['تحلیل هوش مصنوعی',d.ai],['ارسال ایمیل',d.email]];box.innerHTML=items.map(([label,x])=>`<div class=card><b>${esc(label)}</b><br><span class=pill>${x.status==='draft_only'?'ارسال غیرفعال؛ فقط پیش‌نویس':(x.configured?'تنظیم شده':'نیازمند تنظیم')}</span><div class=small>سرویس: ${esc(x.provider)}</div><div class=small>${esc(x.next_action||'تنظیمات ثبت شده است؛ اتصال زنده هنوز جداگانه باید آزموده شود.')}</div></div>`).join('')}catch(e){box.textContent='بررسی اتصال‌ها ناموفق بود.'}}
+async function loadIntegrations(){const box=document.getElementById('integrations');try{const r=await api('/system/integrations');if(!r.ok){box.textContent='برای مشاهده وضعیت اتصال‌ها، توکن مدیر لازم است.';return}const d=await r.json();const items=[['جست‌وجوی خریدار',d.search],['تحلیل هوش مصنوعی',d.ai],['ارسال ایمیل',d.email]];box.innerHTML=items.map(([label,x])=>`<div class=card><b>${esc(label)}</b><br><span class=pill>${x.status==='draft_only'?'ارسال غیرفعال؛ فقط پیش‌نویس':(label==='ارسال ایمیل'?'ارسال SMTP پیکربندی شده':'تنظیم شده')}</span><div class=small>سرویس: ${esc(x.provider)}</div><div class=small>${esc(x.next_action||'تنظیمات ثبت شده است؛ اتصال زنده هنوز جداگانه باید آزموده شود.')}</div></div>`).join('')}catch(e){box.textContent='بررسی اتصال‌ها ناموفق بود.'}}
 loadStats();loadLeads();loadIntegrations();
 </script></body></html>'''
 
