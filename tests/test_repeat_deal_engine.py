@@ -54,3 +54,13 @@ def test_repeat_commission_rejects_invalid_values(quantity, unit_price, commissi
         RepeatDealEngine().commission(
             _source(), quantity, unit_price, explicit_commission=commission
         )
+
+
+@pytest.mark.parametrize("source_overrides", [
+    {"network_commission": 1001},
+    {"quantity": 0, "network_commission": 1},
+])
+def test_repeat_commission_rejects_invalid_source_deal_economics(source_overrides):
+    source = _source(**source_overrides)
+    with pytest.raises(ValueError):
+        RepeatDealEngine().commission(source, quantity=10, unit_price=5)
