@@ -1,4 +1,7 @@
 from typing import Any
+from email.message import EmailMessage
+import smtplib
+import ssl
 import ipaddress
 import json
 import re
@@ -144,7 +147,36 @@ class AIProvider:
 
 class EmailProvider:
     def send(self, to, subject, body):
-        return {'status':'draft_only','to':to,'subject':subject,'body':body}
+        if (settings.email_provider or '').lower() != 'smtp' or not all((
+            settings.smtp_host, settings.smtp_user, settings.smtp_password
+        )):
+            return {'status':'draft_only','to':to,'subject':subject,'body':body}
+
+        message = EmailMessage()
+        message['From'] = settings.smtp_user
+        message['To'] = to
+        message['Subject'] = subject
+        message.set_content(body)
+        try:
+            context = ssl.create_default_context()
+            if int(settings.smtp_port) == 465:
+                with smtplib.SMTP_SSL(settings.smtp_host, int(settings.smtp_port),
+                                      timeout=20, context=context) as server:
+                    server.login(settings.smtp_user, settings.smtp_password)
+                    server.send_message(message)
+            else:
+                with smtplib.SMTP(settings.smtp_host, int(settings.smtp_port),
+                                  timeout=20) as server:
+                    server.ehlo()
+                    server.starttls(context=context)
+                    server.ehlo()
+                    server.login(settings.smtp_user, settings.smtp_password)
+                    server.send_message(message)
+            return {'status':'sent','to':to,'subject':subject}
+        except Exception:
+            # Never return SMTP exceptions; some servers include account details.
+            return {'status':'send_failed','to':to,'subject':subject,
+                    'error':'SMTP delivery failed; verify SMTP host, port, credentials and provider policy.'}
 
 search_provider = SearchProvider()
 contact_extractor = ContactExtractor()
