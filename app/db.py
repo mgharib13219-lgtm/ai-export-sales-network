@@ -322,3 +322,89 @@ def update_deal(deal_id, **fields):
     changes.append('updated_at=CURRENT_TIMESTAMP'); vals.append(deal_id)
     con=_con(); cur=_execute(con,f'UPDATE deals SET {",".join(changes)} WHERE id=?',vals)
     con.commit(); con.close(); return cur.rowcount>0
+
+
+def init_agent_tables():
+    """Create durable product profiles used by scheduled/autonomous cycles."""
+    con = _con()
+    if _is_postgres():
+        con.execute("""CREATE TABLE IF NOT EXISTS agent_profiles (
+          id BIGSERIAL PRIMARY KEY, name TEXT NOT NULL, product_json TEXT NOT NULL,
+          enabled BOOLEAN NOT NULL DEFAULT TRUE, interval_minutes INTEGER NOT NULL DEFAULT 1440,
+          last_run_at TIMESTAMP, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""")
+        con.execute("""CREATE TABLE IF NOT EXISTS agent_runs (
+          id BIGSERIAL PRIMARY KEY, profile_id BIGINT, status TEXT NOT NULL,
+          summary_json TEXT, error_code TEXT, started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          finished_at TIMESTAMP, FOREIGN KEY(profile_id) REFERENCES agent_profiles(id)
+        )""")
+    else:
+        con.execute("""CREATE TABLE IF NOT EXISTS agent_profiles (
+          id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, product_json TEXT NOT NULL,
+          enabled INTEGER NOT NULL DEFAULT 1, interval_minutes INTEGER NOT NULL DEFAULT 1440,
+          last_run_at DATETIME, created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )""")
+        con.execute("""CREATE TABLE IF NOT EXISTS agent_runs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT, profile_id INTEGER, status TEXT NOT NULL,
+          summary_json TEXT, error_code TEXT, started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          finished_at DATETIME, FOREIGN KEY(profile_id) REFERENCES agent_profiles(id)
+        )""")
+    con.commit()
+    con.close()
+
+def save_agent_profile(name, product, interval_minutes=1440, profile_id=None, enabled=True):
+    con = _con()
+    product_json = json.dumps(product, ensure_ascii=False, default=str)
+    if profile_id is None:
+        sql = 'INSERT INTO agent_profiles(name,product_json,enabled,interval_minutes) VALUES(?,?,?,?)'
+        if _is_postgres(): sql += ' RETURNING id'
+        cur = _execute(con, sql, (name, product_json, enabled, interval_minutes))
+        rid = cur.fetchone()['id'] if _is_postgres() else cur.lastrowid
+    else:
+        _execute(con, 'UPDATE agent_profiles SET name=?,product_json=?,enabled=?,interval_minutes=?,updated_at=CURRENT_TIMESTAMP WHERE id=?',
+                 (name, product_json, enabled, interval_minutes, profile_id))
+        rid = profile_id
+    con.commit(); con.close()
+    return rid
+
+def list_agent_profiles(enabled_only=False):
+    con = _con()
+    sql = 'SELECT * FROM agent_profiles' + (' WHERE enabled=?' if enabled_only else '') + ' ORDER BY id'
+    rows = _execute(con, sql, (True,) if enabled_only else ()).fetchall()
+    con.close()
+    out = []
+    for row in rows:
+        item = dict(row)
+        item['product'] = json.loads(item.pop('product_json'))
+        out.append(item)
+    return out
+
+def get_agent_profile(profile_id):
+    rows = [x for x in list_agent_profiles() if int(x['id']) == int(profile_id)]
+    return rows[0] if rows else None
+
+def record_agent_run(profile_id, status, summary=None, error_code=None):
+    con = _con()
+    summary_json = json.dumps(summary, ensure_ascii=False, default=str) if summary is not None else None
+    sql = 'INSERT INTO agent_runs(profile_id,status,summary_json,error_code,finished_at) VALUES(?,?,?,?,CURRENT_TIMESTAMP)'
+    if _is_postgres(): sql += ' RETURNING id'
+    cur = _execute(con, sql, (profile_id, status, summary_json, error_code))
+    rid = cur.fetchone()['id'] if _is_postgres() else cur.lastrowid
+    if status in ('completed','failed'):
+        _execute(con, 'UPDATE agent_profiles SET last_run_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?', (profile_id,))
+    con.commit(); con.close()
+    return rid
+
+def list_agent_runs(limit=50):
+    con = _con()
+    rows = _execute(con, 'SELECT * FROM agent_runs ORDER BY id DESC LIMIT ?', (max(1,min(limit,200)),)).fetchall()
+    con.close()
+    out = [dict(row) for row in rows]
+    for item in out:
+        if item.get('summary_json'):
+            item['summary'] = json.loads(item.pop('summary_json'))
+        else:
+            item.pop('summary_json', None)
+    return out
