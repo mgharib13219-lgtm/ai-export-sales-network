@@ -1,0 +1,28 @@
+name: scheduled-agent
+on:
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: scheduled-agent
+  cancel-in-progress: false
+jobs:
+  run-agent:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call the opt-in agent endpoint
+        env:
+          AGENT_CRON_TOKEN: ${{ secrets.AGENT_CRON_TOKEN }}
+          AGENT_BASE_URL: https://ai-export-sales-network.onrender.com
+        run: |
+          if [ -z "$AGENT_CRON_TOKEN" ]; then
+            echo 'Skipped: configure the AGENT_CRON_TOKEN repository secret after setting the same value in Render.'
+            exit 0
+          fi
+          curl --fail-with-body --silent --show-error \
+            --retry 2 --retry-delay 10 --max-time 180 \
+            -X POST "$AGENT_BASE_URL/agent/cron/run" \
+            -H "X-Agent-Cron-Token: $AGENT_CRON_TOKEN" \
+            -H 'Accept: application/json'
