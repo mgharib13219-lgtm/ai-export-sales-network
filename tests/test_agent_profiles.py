@@ -52,8 +52,6 @@ def test_agent_profiles_are_not_due_before_interval(tmp_path, monkeypatch):
     db.record_agent_run(profile_id, "completed", {"status": "ok"})
     now = datetime.now(timezone.utc)
     assert db.list_due_agent_profiles(now=now) == []
-    due = db.list_due_agent_profiles(now=now.replace(day=now.day) if False else now)
-    assert due == []
 
 
 def test_agent_profiles_become_due_after_interval(tmp_path, monkeypatch):
