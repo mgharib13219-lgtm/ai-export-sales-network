@@ -5,6 +5,7 @@ from dataclasses import dataclass
 class Settings:
     app_name: str = os.getenv('APP_NAME', 'AI Export Sales Network')
     admin_token: str = os.getenv('ADMIN_TOKEN', '')
+    agent_cron_token: str = os.getenv('AGENT_CRON_TOKEN', '')
     environment: str = os.getenv('ENVIRONMENT', 'development')
     app_version: str = os.getenv('APP_VERSION', '1.1.0')
     ai_provider: str = os.getenv('AI_PROVIDER', 'ensemble')
