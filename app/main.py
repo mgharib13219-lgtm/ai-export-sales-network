@@ -1,11 +1,12 @@
 from contextlib import asynccontextmanager
+import hmac
 from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, Depends, HTTPException, Header, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from app.workflow import run_opportunity_pipeline
-from app.db import init_db, add_opportunity, list_opportunities, list_leads, get_lead, update_lead, due_followups, add_activity, list_activities, crm_stats, LEAD_STAGES, claim_idempotency, complete_idempotency, fail_idempotency, add_audit_event, list_audit_events, create_deal, get_deal, list_deals, update_deal
+from app.db import init_db, add_opportunity, list_opportunities, list_leads, get_lead, update_lead, due_followups, add_activity, list_activities, crm_stats, LEAD_STAGES, claim_idempotency, complete_idempotency, fail_idempotency, add_audit_event, list_audit_events, create_deal, get_deal, list_deals, update_deal, save_agent_profile, list_agent_profiles, list_due_agent_profiles, get_agent_profile, record_agent_run, list_agent_runs
 from app.auth import require_admin
 from app.settings import settings
 from app.providers import email_provider
@@ -43,6 +44,12 @@ class Product(BaseModel):
     warehousing: Optional[float] = Field(default=None, ge=0)
     financing: Optional[float] = Field(default=None, ge=0)
     returns_or_waste: Optional[float] = Field(default=None, ge=0)
+
+class AgentProfileCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+    product: Product
+    interval_minutes: int = Field(default=1440, ge=60, le=10080)
+    enabled: bool = True
 
 class LeadUpdate(BaseModel):
     stage: Optional[str] = None
@@ -106,10 +113,18 @@ def ready():
 @app.get('/system/integrations', dependencies=[Depends(require_admin)])
 def integration_status():
     search_configured = settings.search_provider == 'serpapi' and bool(settings.search_api_key)
-    ai_configured = settings.ai_provider == 'openai' and bool(settings.ai_api_key)
+    ai_mode = (settings.ai_provider or 'none').lower()
+    ai_providers = []
+    if settings.ai_api_key and ai_mode in ('openai', 'ensemble'):
+        ai_providers.append('openai')
+    if getattr(settings, 'anthropic_api_key', '') and ai_mode in ('anthropic', 'ensemble'):
+        ai_providers.append('anthropic')
+    if getattr(settings, 'gemini_api_key', '') and ai_mode in ('gemini', 'ensemble'):
+        ai_providers.append('gemini')
+    ai_configured = bool(ai_providers)
     email_configured = (settings.email_provider or '').lower() == 'smtp' and all((getattr(settings, 'smtp_host', ''), getattr(settings, 'smtp_user', ''), getattr(settings, 'smtp_password', '')))
     return {
-        'status': 'ready' if search_configured else 'action_required',
+        'status': 'ready' if search_configured and ai_configured else 'action_required',
         'search': {
             'provider': settings.search_provider or 'none',
             'configured': search_configured,
@@ -117,10 +132,12 @@ def integration_status():
             'next_action': None if search_configured else 'Set SEARCH_PROVIDER=serpapi and add SEARCH_API_KEY in the deployment environment.'
         },
         'ai': {
-            'provider': settings.ai_provider or 'none',
+            'provider': ai_mode,
             'configured': ai_configured,
+            'active_providers': ai_providers,
+            'provider_count': len(ai_providers),
             'status': 'configured' if ai_configured else 'not_configured',
-            'next_action': None if ai_configured else 'Set AI_PROVIDER=openai and add AI_API_KEY to enable AI analysis.'
+            'next_action': None if ai_configured else 'Add at least one supported AI key. For independent multi-model review, configure AI_API_KEY, ANTHROPIC_API_KEY and/or GEMINI_API_KEY with AI_PROVIDER=ensemble.'
         },
         'email': {
             'provider': settings.email_provider or 'none',
@@ -196,6 +213,68 @@ def run(product: Product, request: Request, x_idempotency_key: Optional[str] = H
             add_audit_event('pipeline.failed','admin',request_id,'product',product.name,{'error':str(exc)})
         finally:
             raise
+
+@app.get('/agent/profiles', dependencies=[Depends(require_admin)])
+def agent_profiles():
+    return list_agent_profiles()
+
+@app.post('/agent/profiles', dependencies=[Depends(require_admin)])
+def agent_profile_create(data: AgentProfileCreate):
+    profile_id = save_agent_profile(data.name, data.product.model_dump(),
+                                    data.interval_minutes, enabled=data.enabled)
+    add_audit_event('agent.profile_created','admin',str(profile_id),'agent_profile',str(profile_id),
+                    {'name':data.name,'enabled':data.enabled,'interval_minutes':data.interval_minutes})
+    return get_agent_profile(profile_id)
+
+@app.patch('/agent/profiles/{profile_id}', dependencies=[Depends(require_admin)])
+def agent_profile_update(profile_id: int, data: AgentProfileCreate):
+    if not get_agent_profile(profile_id):
+        raise HTTPException(404, 'agent_profile_not_found')
+    save_agent_profile(data.name, data.product.model_dump(), data.interval_minutes,
+                       profile_id=profile_id, enabled=data.enabled)
+    add_audit_event('agent.profile_updated','admin',str(profile_id),'agent_profile',str(profile_id),
+                    {'enabled':data.enabled,'interval_minutes':data.interval_minutes})
+    return get_agent_profile(profile_id)
+
+
+@app.post('/agent/cron/run')
+def agent_cron_run(x_agent_cron_token: Optional[str] = Header(default=None)):
+    expected = getattr(settings, 'agent_cron_token', '')
+    if not expected or not x_agent_cron_token or not hmac.compare_digest(expected, x_agent_cron_token):
+        raise HTTPException(401, 'invalid_agent_cron_token')
+    return agent_run_cycle()
+
+@app.get('/agent/runs', dependencies=[Depends(require_admin)])
+def agent_run_history(limit: int = 50):
+    return list_agent_runs(limit)
+
+@app.post('/agent/run-cycle', dependencies=[Depends(require_admin)])
+def agent_run_cycle():
+    # Explicitly bounded: one request can process at most three enabled profiles.
+    profiles = list_due_agent_profiles(limit=3)
+    if not profiles:
+        return {'status':'idle','processed':0,'message':'No enabled profiles are due for a run.'}
+    results = []
+    for profile in profiles:
+        run_id = None
+        try:
+            result = run_opportunity_pipeline(profile['product'])
+            # The orchestrator persists verified/matched leads itself. Never create
+            # placeholder buyers from provider diagnostics or empty search results.
+            run_id = record_agent_run(profile['id'],'completed',result)
+            add_audit_event('agent.cycle_completed','admin',str(run_id),'agent_profile',
+                            str(profile['id']),{'profile_name':profile['name']})
+            results.append({'profile_id':profile['id'],'run_id':run_id,'status':'completed',
+                            'lead_ids':result.get('lead_ids',[]) if isinstance(result,dict) else []})
+        except Exception:
+            # Keep provider secrets and raw exception text out of API responses.
+            run_id = record_agent_run(profile['id'],'failed',None,'pipeline_error')
+            add_audit_event('agent.cycle_failed','admin',str(run_id),'agent_profile',
+                            str(profile['id']),{'error_code':'pipeline_error'})
+            results.append({'profile_id':profile['id'],'run_id':run_id,'status':'failed',
+                            'error_code':'pipeline_error'})
+    return {'status':'completed','processed':len(results),'results':results,
+            'safety':'Draft/research only; no outbound messages, quotes, contracts, purchases, or payments are sent automatically.'}
 
 @app.get('/opportunities', dependencies=[Depends(require_admin)])
 def opportunities(): return list_opportunities()
