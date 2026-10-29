@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from app.workflow import run_opportunity_pipeline
-from app.db import init_db, add_opportunity, list_opportunities, list_leads, get_lead, update_lead, due_followups, add_activity, list_activities, crm_stats, LEAD_STAGES, claim_idempotency, complete_idempotency, fail_idempotency, add_audit_event, list_audit_events, create_deal, get_deal, list_deals, update_deal
+from app.db import init_db, add_opportunity, list_opportunities, list_leads, get_lead, update_lead, due_followups, add_activity, list_activities, crm_stats, LEAD_STAGES, claim_idempotency, complete_idempotency, fail_idempotency, add_audit_event, list_audit_events, create_deal, get_deal, list_deals, update_deal, save_agent_profile, list_agent_profiles, get_agent_profile, record_agent_run, list_agent_runs
 from app.auth import require_admin
 from app.settings import settings
 from app.providers import email_provider
@@ -43,6 +43,12 @@ class Product(BaseModel):
     warehousing: Optional[float] = Field(default=None, ge=0)
     financing: Optional[float] = Field(default=None, ge=0)
     returns_or_waste: Optional[float] = Field(default=None, ge=0)
+
+class AgentProfileCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+    product: Product
+    interval_minutes: int = Field(default=1440, ge=60, le=10080)
+    enabled: bool = True
 
 class LeadUpdate(BaseModel):
     stage: Optional[str] = None
@@ -206,6 +212,68 @@ def run(product: Product, request: Request, x_idempotency_key: Optional[str] = H
             add_audit_event('pipeline.failed','admin',request_id,'product',product.name,{'error':str(exc)})
         finally:
             raise
+
+@app.get('/agent/profiles', dependencies=[Depends(require_admin)])
+def agent_profiles():
+    return list_agent_profiles()
+
+@app.post('/agent/profiles', dependencies=[Depends(require_admin)])
+def agent_profile_create(data: AgentProfileCreate):
+    profile_id = save_agent_profile(data.name, data.product.model_dump(),
+                                    data.interval_minutes, enabled=data.enabled)
+    add_audit_event('agent.profile_created','admin',str(profile_id),'agent_profile',str(profile_id),
+                    {'name':data.name,'enabled':data.enabled,'interval_minutes':data.interval_minutes})
+    return get_agent_profile(profile_id)
+
+@app.patch('/agent/profiles/{profile_id}', dependencies=[Depends(require_admin)])
+def agent_profile_update(profile_id: int, data: AgentProfileCreate):
+    if not get_agent_profile(profile_id):
+        raise HTTPException(404, 'agent_profile_not_found')
+    save_agent_profile(data.name, data.product.model_dump(), data.interval_minutes,
+                       profile_id=profile_id, enabled=data.enabled)
+    add_audit_event('agent.profile_updated','admin',str(profile_id),'agent_profile',str(profile_id),
+                    {'enabled':data.enabled,'interval_minutes':data.interval_minutes})
+    return get_agent_profile(profile_id)
+
+@app.get('/agent/runs', dependencies=[Depends(require_admin)])
+def agent_run_history(limit: int = 50):
+    return list_agent_runs(limit)
+
+@app.post('/agent/run-cycle', dependencies=[Depends(require_admin)])
+def agent_run_cycle():
+    # Explicitly bounded: one request can process at most three enabled profiles.
+    profiles = list_agent_profiles(enabled_only=True)[:3]
+    if not profiles:
+        return {'status':'idle','processed':0,'message':'No enabled product profiles.'}
+    results = []
+    for profile in profiles:
+        run_id = None
+        try:
+            result = run_opportunity_pipeline(profile['product'])
+            opps = result.get('opportunities') if isinstance(result, dict) else None
+            if opps:
+                for opportunity in opps[:100]:
+                    add_opportunity({'product_name':profile['product'].get('name',''),
+                                     **opportunity})
+            else:
+                first = (profile['product'].get('target_countries') or [''])[0]
+                add_opportunity({'product_name':profile['product'].get('name',''),
+                                 'country':first,'buyer':'pending provider connection',
+                                 'score':0,'payload':result})
+            run_id = record_agent_run(profile['id'],'completed',result)
+            add_audit_event('agent.cycle_completed','admin',str(run_id),'agent_profile',
+                            str(profile['id']),{'profile_name':profile['name']})
+            results.append({'profile_id':profile['id'],'run_id':run_id,'status':'completed',
+                            'lead_ids':result.get('lead_ids',[]) if isinstance(result,dict) else []})
+        except Exception as exc:
+            # Keep provider secrets and raw exception text out of API responses.
+            run_id = record_agent_run(profile['id'],'failed',None,'pipeline_error')
+            add_audit_event('agent.cycle_failed','admin',str(run_id),'agent_profile',
+                            str(profile['id']),{'error_code':'pipeline_error'})
+            results.append({'profile_id':profile['id'],'run_id':run_id,'status':'failed',
+                            'error_code':'pipeline_error'})
+    return {'status':'completed','processed':len(results),'results':results,
+            'safety':'Draft/research only; no outbound messages, quotes, contracts, purchases, or payments are sent automatically.'}
 
 @app.get('/opportunities', dependencies=[Depends(require_admin)])
 def opportunities(): return list_opportunities()
