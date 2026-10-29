@@ -38,3 +38,32 @@ def test_agent_run_history_does_not_expose_raw_errors(tmp_path, monkeypatch):
     assert runs[0]["id"] == run_id
     assert runs[0]["status"] == "failed"
     assert runs[0]["error_code"] == "pipeline_error"
+
+
+
+def test_agent_profiles_are_not_due_before_interval(tmp_path, monkeypatch):
+    from datetime import datetime, timezone
+    monkeypatch.setattr(db, "settings", SimpleNamespace(
+        database_url="", environment="development"
+    ))
+    monkeypatch.setattr(db, "DB_PATH", tmp_path / "agent-due.sqlite")
+    db.init_db()
+    profile_id = db.save_agent_profile("Daily product", {"name": "Daily product"}, 1440)
+    db.record_agent_run(profile_id, "completed", {"status": "ok"})
+    now = datetime.now(timezone.utc)
+    assert db.list_due_agent_profiles(now=now) == []
+    due = db.list_due_agent_profiles(now=now.replace(day=now.day) if False else now)
+    assert due == []
+
+
+def test_agent_profiles_become_due_after_interval(tmp_path, monkeypatch):
+    from datetime import datetime, timezone, timedelta
+    monkeypatch.setattr(db, "settings", SimpleNamespace(
+        database_url="", environment="development"
+    ))
+    monkeypatch.setattr(db, "DB_PATH", tmp_path / "agent-due-2.sqlite")
+    db.init_db()
+    profile_id = db.save_agent_profile("Hourly product", {"name": "Hourly product"}, 60)
+    db.record_agent_run(profile_id, "completed", {"status": "ok"})
+    due = db.list_due_agent_profiles(now=datetime.now(timezone.utc) + timedelta(hours=2))
+    assert [p["id"] for p in due] == [profile_id]
