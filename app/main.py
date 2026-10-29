@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import hmac
 from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, Depends, HTTPException, Header, Request
 from fastapi.responses import HTMLResponse
@@ -234,6 +235,14 @@ def agent_profile_update(profile_id: int, data: AgentProfileCreate):
     add_audit_event('agent.profile_updated','admin',str(profile_id),'agent_profile',str(profile_id),
                     {'enabled':data.enabled,'interval_minutes':data.interval_minutes})
     return get_agent_profile(profile_id)
+
+
+@app.post('/agent/cron/run')
+def agent_cron_run(x_agent_cron_token: Optional[str] = Header(default=None)):
+    expected = getattr(settings, 'agent_cron_token', '')
+    if not expected or not x_agent_cron_token or not hmac.compare_digest(expected, x_agent_cron_token):
+        raise HTTPException(401, 'invalid_agent_cron_token')
+    return agent_run_cycle()
 
 @app.get('/agent/runs', dependencies=[Depends(require_admin)])
 def agent_run_history(limit: int = 50):
