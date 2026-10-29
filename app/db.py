@@ -143,6 +143,7 @@ def init_db():
             _execute(con, f'ALTER TABLE deals ADD COLUMN {column} {ddl}')
     con.commit()
     con.close()
+    init_agent_tables()
 
 def claim_idempotency(idem_key):
     if not idem_key or len(idem_key) > 200:
