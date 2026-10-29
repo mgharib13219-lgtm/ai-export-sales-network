@@ -110,9 +110,9 @@ def integration_status():
     ai_providers = []
     if settings.ai_api_key and ai_mode in ('openai', 'ensemble'):
         ai_providers.append('openai')
-    if settings.anthropic_api_key and ai_mode in ('anthropic', 'ensemble'):
+    if getattr(settings, 'anthropic_api_key', '') and ai_mode in ('anthropic', 'ensemble'):
         ai_providers.append('anthropic')
-    if settings.gemini_api_key and ai_mode in ('gemini', 'ensemble'):
+    if getattr(settings, 'gemini_api_key', '') and ai_mode in ('gemini', 'ensemble'):
         ai_providers.append('gemini')
     ai_configured = bool(ai_providers)
     email_configured = (settings.email_provider or '').lower() == 'smtp' and all((getattr(settings, 'smtp_host', ''), getattr(settings, 'smtp_user', ''), getattr(settings, 'smtp_password', '')))
