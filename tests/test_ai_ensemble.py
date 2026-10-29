@@ -16,7 +16,7 @@ def test_ensemble_merge_uses_conservative_score_and_combines_risks():
         }},
     ])
     assert result["status"] == "ok"
-    assert result["parsed"]["score"] == 66
+    assert result["parsed"]["score"] == 57
     assert set(result["parsed"]["risk_flags"]) == {"domain_mismatch", "no_import_evidence"}
     assert result["parsed"]["_ensemble"]["provider_count"] == 2
     assert result["parsed"]["_ensemble"]["agreement"] == "partial_review_required"
