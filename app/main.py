@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from app.workflow import run_opportunity_pipeline
-from app.db import init_db, add_opportunity, list_opportunities, list_leads, get_lead, update_lead, due_followups, add_activity, list_activities, crm_stats, LEAD_STAGES, claim_idempotency, complete_idempotency, fail_idempotency, add_audit_event, list_audit_events, create_deal, get_deal, list_deals, update_deal, save_agent_profile, list_agent_profiles, get_agent_profile, record_agent_run, list_agent_runs
+from app.db import init_db, add_opportunity, list_opportunities, list_leads, get_lead, update_lead, due_followups, add_activity, list_activities, crm_stats, LEAD_STAGES, claim_idempotency, complete_idempotency, fail_idempotency, add_audit_event, list_audit_events, create_deal, get_deal, list_deals, update_deal, save_agent_profile, list_agent_profiles, list_due_agent_profiles, get_agent_profile, record_agent_run, list_agent_runs
 from app.auth import require_admin
 from app.settings import settings
 from app.providers import email_provider
@@ -242,30 +242,22 @@ def agent_run_history(limit: int = 50):
 @app.post('/agent/run-cycle', dependencies=[Depends(require_admin)])
 def agent_run_cycle():
     # Explicitly bounded: one request can process at most three enabled profiles.
-    profiles = list_agent_profiles(enabled_only=True)[:3]
+    profiles = list_due_agent_profiles(limit=3)
     if not profiles:
-        return {'status':'idle','processed':0,'message':'No enabled product profiles.'}
+        return {'status':'idle','processed':0,'message':'No enabled profiles are due for a run.'}
     results = []
     for profile in profiles:
         run_id = None
         try:
             result = run_opportunity_pipeline(profile['product'])
-            opps = result.get('opportunities') if isinstance(result, dict) else None
-            if opps:
-                for opportunity in opps[:100]:
-                    add_opportunity({'product_name':profile['product'].get('name',''),
-                                     **opportunity})
-            else:
-                first = (profile['product'].get('target_countries') or [''])[0]
-                add_opportunity({'product_name':profile['product'].get('name',''),
-                                 'country':first,'buyer':'pending provider connection',
-                                 'score':0,'payload':result})
+            # The orchestrator persists verified/matched leads itself. Never create
+            # placeholder buyers from provider diagnostics or empty search results.
             run_id = record_agent_run(profile['id'],'completed',result)
             add_audit_event('agent.cycle_completed','admin',str(run_id),'agent_profile',
                             str(profile['id']),{'profile_name':profile['name']})
             results.append({'profile_id':profile['id'],'run_id':run_id,'status':'completed',
                             'lead_ids':result.get('lead_ids',[]) if isinstance(result,dict) else []})
-        except Exception as exc:
+        except Exception:
             # Keep provider secrets and raw exception text out of API responses.
             run_id = record_agent_run(profile['id'],'failed',None,'pipeline_error')
             add_audit_event('agent.cycle_failed','admin',str(run_id),'agent_profile',
