@@ -106,10 +106,18 @@ def ready():
 @app.get('/system/integrations', dependencies=[Depends(require_admin)])
 def integration_status():
     search_configured = settings.search_provider == 'serpapi' and bool(settings.search_api_key)
-    ai_configured = settings.ai_provider == 'openai' and bool(settings.ai_api_key)
+    ai_mode = (settings.ai_provider or 'none').lower()
+    ai_providers = []
+    if settings.ai_api_key and ai_mode in ('openai', 'ensemble'):
+        ai_providers.append('openai')
+    if settings.anthropic_api_key and ai_mode in ('anthropic', 'ensemble'):
+        ai_providers.append('anthropic')
+    if settings.gemini_api_key and ai_mode in ('gemini', 'ensemble'):
+        ai_providers.append('gemini')
+    ai_configured = bool(ai_providers)
     email_configured = (settings.email_provider or '').lower() == 'smtp' and all((getattr(settings, 'smtp_host', ''), getattr(settings, 'smtp_user', ''), getattr(settings, 'smtp_password', '')))
     return {
-        'status': 'ready' if search_configured else 'action_required',
+        'status': 'ready' if search_configured and ai_configured else 'action_required',
         'search': {
             'provider': settings.search_provider or 'none',
             'configured': search_configured,
@@ -117,10 +125,12 @@ def integration_status():
             'next_action': None if search_configured else 'Set SEARCH_PROVIDER=serpapi and add SEARCH_API_KEY in the deployment environment.'
         },
         'ai': {
-            'provider': settings.ai_provider or 'none',
+            'provider': ai_mode,
             'configured': ai_configured,
+            'active_providers': ai_providers,
+            'provider_count': len(ai_providers),
             'status': 'configured' if ai_configured else 'not_configured',
-            'next_action': None if ai_configured else 'Set AI_PROVIDER=openai and add AI_API_KEY to enable AI analysis.'
+            'next_action': None if ai_configured else 'Add at least one supported AI key. For independent multi-model review, configure AI_API_KEY, ANTHROPIC_API_KEY and/or GEMINI_API_KEY with AI_PROVIDER=ensemble.'
         },
         'email': {
             'provider': settings.email_provider or 'none',
