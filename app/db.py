@@ -382,6 +382,27 @@ def list_agent_profiles(enabled_only=False):
         out.append(item)
     return out
 
+def list_due_agent_profiles(limit=3, now=None):
+    """Return enabled profiles whose configured interval has elapsed."""
+    now = now or datetime.now(timezone.utc)
+    due = []
+    for profile in list_agent_profiles(enabled_only=True):
+        last = profile.get('last_run_at')
+        if last:
+            if isinstance(last, str):
+                try:
+                    last = datetime.fromisoformat(last.replace('Z', '+00:00'))
+                except ValueError:
+                    continue
+            if last.tzinfo is None:
+                last = last.replace(tzinfo=timezone.utc)
+            if (now - last).total_seconds() < int(profile.get('interval_minutes') or 1440) * 60:
+                continue
+        due.append(profile)
+        if len(due) >= max(1, min(int(limit), 3)):
+            break
+    return due
+
 def get_agent_profile(profile_id):
     rows = [x for x in list_agent_profiles() if int(x['id']) == int(profile_id)]
     return rows[0] if rows else None
