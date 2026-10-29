@@ -200,12 +200,13 @@ def run(product: Product, request: Request, x_idempotency_key: Optional[str] = H
     request_id = x_idempotency_key
     try:
         result=run_opportunity_pipeline(product.model_dump())
+        # Persist only actual opportunities returned by the pipeline. Empty or
+        # diagnostic-only results must not create placeholder buyers/opportunities.
         opps=result.get('opportunities') if isinstance(result,dict) else None
-        if opps:
-            for o in opps: add_opportunity({'product_name':product.name,**o})
-        else:
-            first=(product.target_countries or [''])[0]
-            add_opportunity({'product_name':product.name,'country':first,'buyer':'pending provider connection','score':0,'payload':result})
+        if isinstance(opps, list):
+            for o in opps:
+                if isinstance(o, dict):
+                    add_opportunity({'product_name':product.name,**o})
         add_audit_event('pipeline.completed','admin',request_id,'product',product.name,
                         {'target_countries':product.target_countries,'lead_ids':result.get('lead_ids',[])})
         complete_idempotency(x_idempotency_key,result)
