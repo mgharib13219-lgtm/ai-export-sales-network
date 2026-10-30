@@ -1,0 +1,67 @@
+{
+  "profile_name": "Iran Raisins Export Pilot",
+  "origin_country": "Iran",
+  "product_category": "dried_grapes",
+  "hs_code": "080620",
+  "available_varieties": [
+    "golden raisins",
+    "green raisins",
+    "sun-dried raisins",
+    "sultana and other Iranian raisin varieties"
+  ],
+  "available_volume_mt": {
+    "minimum": 20,
+    "maximum": 100
+  },
+  "packaging_options": [
+    {
+      "type": "bulk_bags",
+      "weight_kg": [10, 12.5]
+    },
+    {
+      "type": "export_cartons",
+      "weight_kg": null,
+      "specification": "To be agreed with buyer"
+    }
+  ],
+  "price_status": "quote_required_after_specification_and_destination_review",
+  "initial_market_research_priority": [
+    "Turkey",
+    "Kazakhstan",
+    "Germany",
+    "Azerbaijan",
+    "Algeria",
+    "Pakistan",
+    "Malaysia"
+  ],
+  "qualification_requirements": [
+    "Verify legal entity and official website",
+    "Verify public business contact from official source",
+    "Confirm current raisin purchasing activity",
+    "Confirm acceptance of Iran origin and lawful payment/shipping route",
+    "Confirm variety, grade, moisture, size, color, defects and food-safety specifications",
+    "Confirm volume, packaging, destination port and Incoterms",
+    "Record evidence URL and date for every material claim"
+  ],
+  "automation_policy": {
+    "research_and_lead_scoring": "automatic",
+    "draft_outreach": "automatic",
+    "send_outreach": "human_approval_required",
+    "final_price_or_quote": "human_approval_required",
+    "contracts_payments_and_shipping_commitments": "human_approval_required",
+    "sanctions_customs_and_compliance_exceptions": "human_approval_required"
+  },
+  "lead_scoring_weights": {
+    "documented_raisins_import_activity": 30,
+    "documented_imports_from_iran": 25,
+    "product_and_volume_fit": 20,
+    "verified_official_contact": 10,
+    "lawful_logistics_and_payment_feasibility": 15
+  },
+  "data_quality_rules": [
+    "Never invent buyer names, contacts, prices, shipment records or certifications",
+    "Distinguish verified facts from estimates and hypotheses",
+    "Treat trade-database snippets as leads, not proof of current purchasing intent",
+    "Do not store sensitive personal contact data unless lawfully sourced and necessary"
+  ]
+}
