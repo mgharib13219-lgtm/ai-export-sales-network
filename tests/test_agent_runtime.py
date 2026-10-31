@@ -29,3 +29,18 @@ def test_approval_decision_is_only_a_recorded_boolean():
 def test_all_role_prompts_are_constructible():
     for role in ROLES:
         assert role.title in build_system_prompt(role.key)
+
+
+from app.agent_runtime import _contains_side_effect_instruction
+
+
+def test_nested_side_effect_directives_are_rejected():
+    assert _contains_side_effect_instruction({"brief": {"send_email": True}})
+    assert _contains_side_effect_instruction([{"payment": {"makePayment": {"amount": 10}}}])
+
+
+def test_ordinary_research_payload_is_not_rejected():
+    assert not _contains_side_effect_instruction({
+        "product": "any product", "destination": "Germany",
+        "research": ["market size", "import statistics"]
+    })
