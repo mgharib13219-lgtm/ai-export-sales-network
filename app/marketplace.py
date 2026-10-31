@@ -426,10 +426,18 @@ def list_requests(category: Optional[str] = Query(default=None, max_length=120),
 
 @router.post("/verification")
 def request_verification(data: VerificationRequest, user=Depends(_current_user)):
+    allowed_types = {
+        "company_identity", "company_registration", "representative_authority",
+        "product_certificate", "quality_certificate", "export_license",
+        "bank_account_ownership", "facility_audit"
+    }
+    verification_type = data.verification_type.strip().lower()
+    if verification_type not in allowed_types:
+        raise HTTPException(422, "unsupported_verification_type")
     con = _con()
     verification_id = _id_insert(con, """INSERT INTO marketplace_verifications
         (user_id,verification_type,notes) VALUES(?,?,?)""",
-        (user["id"], data.verification_type, data.notes))
+        (user["id"], verification_type, data.notes))
     con.commit()
     con.close()
     add_audit_event("marketplace.verification_requested", user["email"], str(verification_id),
