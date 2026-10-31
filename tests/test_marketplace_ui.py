@@ -12,6 +12,7 @@ def test_public_marketplace_page_is_available_and_has_safe_dom_rendering():
     assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
     assert response.headers["x-content-type-options"] == "nosniff"
     assert response.headers["x-frame-options"] == "DENY"
+    assert response.headers["cache-control"] == "no-store"
     assert "بازار تجارت جهانی" in response.text
     assert "textContent" in response.text
     assert "innerHTML" not in response.text
