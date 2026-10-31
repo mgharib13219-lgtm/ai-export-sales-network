@@ -56,7 +56,7 @@ class TaskCreate(BaseModel):
     task_type: str = Field(min_length=3, max_length=50)
     payload: dict
     roles: list[str] = Field(default_factory=lambda: [
-        "market_intelligence", "buyer_discovery", "compliance", "quality_auditor"
+        "market_intelligence", "compliance", "buyer_discovery", "quality_auditor"
     ], max_length=8)
 
 
@@ -68,6 +68,14 @@ class ApprovalRequest(BaseModel):
 class ApprovalDecision(BaseModel):
     approved: bool
     note: str = Field(default="", max_length=2000)
+
+
+def _compliance_precedes_sensitive_roles(roles):
+    sensitive = {"buyer_discovery", "supplier_onboarding", "matching", "catalogue", "commercial_advisor"}
+    positions = [roles.index(role) for role in sensitive if role in roles]
+    if not positions:
+        return True
+    return "compliance" in roles and roles.index("compliance") < min(positions)
 
 
 def _insert_id(con, sql, params):
@@ -247,6 +255,8 @@ def create_task(data: TaskCreate):
     allowed = {r.key for r in ROLES}
     if not data.roles or len(set(data.roles)) != len(data.roles) or any(r not in allowed for r in data.roles):
         raise HTTPException(422, "invalid_or_duplicate_agent_role")
+    if not _compliance_precedes_sensitive_roles(data.roles):
+        raise HTTPException(422, "compliance_role_must_precede_sensitive_research")
     if _payload_exceeds_limits(data.payload) or len(_json(data.payload).encode("utf-8")) > 50000:
         raise HTTPException(413, "agent_payload_exceeds_limits")
     if _contains_side_effect_instruction(data.payload):
