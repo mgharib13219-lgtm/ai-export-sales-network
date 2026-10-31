@@ -108,4 +108,10 @@ if(token())api('/marketplace/me').then(data=>{user=data;renderAccount();}).catch
 
 @router.get("/market", response_class=HTMLResponse)
 def marketplace_home():
-    return HTMLResponse(PAGE)
+    return HTMLResponse(PAGE, headers={
+        "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "X-Frame-Options": "DENY",
+        "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    })
