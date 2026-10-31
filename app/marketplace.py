@@ -177,9 +177,12 @@ def register(data: Register):
             "next_step": "Login to publish listings or submit buyer requests. Company verification is separate."}
 
 
-def _login_attempt_key(email: str, client_host: str) -> str:
-    raw = (email.strip().lower() + "|" + client_host).encode("utf-8")
-    return hashlib.sha256(raw).hexdigest()
+def _login_attempt_keys(email: str, client_host: str):
+    normalized_email = email.strip().lower()
+    return (
+        hashlib.sha256(("email|" + normalized_email).encode("utf-8")).hexdigest(),
+        hashlib.sha256(("client|" + client_host).encode("utf-8")).hexdigest(),
+    )
 
 def _check_login_lock(con, attempt_key: str, now: datetime):
     row = _execute(con, "SELECT failures,window_started_at,locked_until FROM marketplace_login_attempts WHERE attempt_key=?", (attempt_key,)).fetchone()
@@ -210,16 +213,19 @@ def login(data: Login, request: Request):
     email = data.email.strip().lower()
     now = datetime.now(timezone.utc)
     client_host = request.client.host if request.client else "unknown"
-    attempt_key = _login_attempt_key(email, client_host)
+    attempt_keys = _login_attempt_keys(email, client_host)
     con = _con()
     try:
-        _check_login_lock(con, attempt_key, now)
+        for attempt_key in attempt_keys:
+            _check_login_lock(con, attempt_key, now)
         row = _execute(con, "SELECT * FROM marketplace_users WHERE email=?", (email,)).fetchone()
         if not row or not _verify_password(data.password, row["password_hash"]):
-            _record_login_failure(con, attempt_key, now)
+            for attempt_key in attempt_keys:
+                _record_login_failure(con, attempt_key, now)
             con.commit()
             raise HTTPException(401, "invalid_credentials")
-        _execute(con, "DELETE FROM marketplace_login_attempts WHERE attempt_key=?", (attempt_key,))
+        for attempt_key in attempt_keys:
+            _execute(con, "DELETE FROM marketplace_login_attempts WHERE attempt_key=?", (attempt_key,))
         token = secrets.token_urlsafe(40)
         expires = now + timedelta(days=7)
         _execute(con, "INSERT INTO marketplace_sessions(token_hash,user_id,expires_at) VALUES(?,?,?)", (hashlib.sha256(token.encode()).hexdigest(), row["id"], expires.isoformat()))
