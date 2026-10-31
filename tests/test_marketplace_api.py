@@ -126,3 +126,11 @@ def test_password_change_revokes_all_active_sessions(tmp_path, monkeypatch):
         "email": "password-change@example.com", "password": "a-different-long-password"
     })
     assert relogin.status_code == 200
+
+def test_login_unknown_account_uses_same_generic_error(tmp_path, monkeypatch):
+    client = _client(tmp_path, monkeypatch)
+    response = client.post("/marketplace/login", json={
+        "email": "not-registered@example.com", "password": "a-long-test-password"
+    })
+    assert response.status_code == 401
+    assert response.json()["detail"] == "invalid_credentials"
