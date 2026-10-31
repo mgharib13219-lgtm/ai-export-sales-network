@@ -88,6 +88,21 @@ def _json(value):
     return json.dumps(value, ensure_ascii=False, default=str)
 
 
+def _validate_agent_output(value):
+    if not isinstance(value, dict):
+        return False
+    if value.get('status') not in {'COMPLETE', 'NEEDS_REVIEW', 'BLOCKED', 'INSUFFICIENT_EVIDENCE'}:
+        return False
+    if value.get('human_approval_required') is not True:
+        return False
+    confidence = value.get('confidence')
+    if isinstance(confidence, bool) or not isinstance(confidence, (int, float)) or not 0 <= confidence <= 100:
+        return False
+    for field in ('findings', 'sources', 'assumptions', 'risks_and_holds'):
+        if not isinstance(value.get(field), list):
+            return False
+    return True
+
 def _contains_side_effect_instruction(value):
     # Reject obvious action directives at any nesting depth; runtime still has no tools.
     forbidden = {"sendemail", "sendmessage", "makepayment", "signcontract",
@@ -123,8 +138,9 @@ def _run_role(role_key, task_type, payload):
     for provider_name, call in configured:
         try:
             parsed = ai_provider._parse(call(prompt))
-            outputs.append({"provider": provider_name, "status": "ok" if parsed else "invalid_output",
-                            "parsed": parsed})
+            valid_output = parsed if _validate_agent_output(parsed) else None
+            outputs.append({"provider": provider_name, "status": "ok" if valid_output else "invalid_output",
+                            "parsed": valid_output})
         except Exception:
             outputs.append({"provider": provider_name, "status": "provider_error", "parsed": None})
     valid = [o for o in outputs if o["parsed"]]
