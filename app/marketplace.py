@@ -96,6 +96,11 @@ class Login(BaseModel):
     password: str
 
 
+class PasswordChange(BaseModel):
+    current_password: str = Field(min_length=1, max_length=200)
+    new_password: str = Field(min_length=12, max_length=200)
+
+
 class ProductListing(BaseModel):
     name: str = Field(min_length=2, max_length=180)
     category: str = Field(min_length=2, max_length=120)
@@ -228,6 +233,20 @@ def login(data: Login, request: Request):
 def me(user=Depends(_current_user)):
     return user
 
+
+@router.post("/password")
+def change_password(data: PasswordChange, user=Depends(_current_user)):
+    con = _con()
+    row = _execute(con, "SELECT password_hash FROM marketplace_users WHERE id=?", (user["id"],)).fetchone()
+    if not row or not _verify_password(data.current_password, row["password_hash"]):
+        con.close()
+        raise HTTPException(401, "current_password_incorrect")
+    _execute(con, "UPDATE marketplace_users SET password_hash=? WHERE id=?", (_hash_password(data.new_password), user["id"]))
+    _execute(con, "DELETE FROM marketplace_sessions WHERE user_id=?", (user["id"],))
+    con.commit()
+    con.close()
+    add_audit_event("marketplace.password_changed", user["email"], str(user["id"]), "user", str(user["id"]), {"sessions_revoked": True})
+    return {"status": "password_changed", "sessions_revoked": True, "next_step": "Log in again on each device."}
 
 @router.post("/logout")
 def logout(authorization: Optional[str] = Header(default=None), user=Depends(_current_user)):
