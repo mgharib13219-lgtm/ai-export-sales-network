@@ -65,6 +65,10 @@ def init_marketplace():
     ])
     for statement in statements:
         _execute(con, statement)
+    now = datetime.now(timezone.utc).isoformat()
+    _execute(con, "DELETE FROM marketplace_sessions WHERE expires_at<=?", (now,))
+    _execute(con, "DELETE FROM marketplace_login_attempts WHERE window_started_at<=? AND (locked_until IS NULL OR locked_until<=?)",
+             ((datetime.now(timezone.utc) - timedelta(days=1)).isoformat(), now))
     con.commit()
     con.close()
 
