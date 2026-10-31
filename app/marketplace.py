@@ -287,6 +287,38 @@ def create_request(data: BuyRequest, user=Depends(_current_user)):
     return {"request_id": request_id, "status": "open"}
 
 
+@router.patch("/requests/{request_id}")
+def update_buy_request(request_id: int, data: BuyRequest, user=Depends(_current_user)):
+    _require_role(user, "buyer")
+    con = _con()
+    cur = _execute(con, """UPDATE marketplace_requests SET title=?,category=?,specification=?,
+        destination=?,quantity=? WHERE id=? AND buyer_id=? AND status='open'""",
+        (data.title, data.category, data.specification, data.destination, data.quantity,
+         request_id, user["id"]))
+    con.commit()
+    con.close()
+    if cur.rowcount != 1:
+        raise HTTPException(404, "open_buy_request_not_found_or_not_owned")
+    add_audit_event("marketplace.buy_request_updated", user["email"], str(request_id),
+                    "buy_request", str(request_id), {"buyer_id": user["id"]})
+    return {"request_id": request_id, "status": "updated"}
+
+
+@router.delete("/requests/{request_id}")
+def close_buy_request(request_id: int, user=Depends(_current_user)):
+    _require_role(user, "buyer")
+    con = _con()
+    cur = _execute(con, """UPDATE marketplace_requests SET status='closed'
+        WHERE id=? AND buyer_id=? AND status='open'""", (request_id, user["id"]))
+    con.commit()
+    con.close()
+    if cur.rowcount != 1:
+        raise HTTPException(404, "open_buy_request_not_found_or_not_owned")
+    add_audit_event("marketplace.buy_request_closed", user["email"], str(request_id),
+                    "buy_request", str(request_id), {"buyer_id": user["id"]})
+    return {"request_id": request_id, "status": "closed"}
+
+
 @router.get("/requests")
 def list_requests(category: Optional[str] = None, limit: int = 50, user=Depends(_current_user)):
     _require_role(user, "producer")
