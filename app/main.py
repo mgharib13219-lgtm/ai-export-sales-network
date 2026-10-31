@@ -16,6 +16,7 @@ from agents.quote import QuoteAgent
 from agents.negotiation import NegotiationAgent
 from app.rate_limit import pipeline_limiter
 from app.marketplace import router as marketplace_router, init_marketplace
+from app.marketplace_ui import router as marketplace_ui_router
 from app.agent_runtime import router as agent_work_router, init_agent_runtime
 from agents.repeat_deal import RepeatDealEngine
 
@@ -28,6 +29,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title=settings.app_name, version=settings.app_version, lifespan=lifespan)
 app.include_router(marketplace_router)
+app.include_router(marketplace_ui_router)
 app.include_router(agent_work_router)
 
 class Product(BaseModel):
