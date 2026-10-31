@@ -44,3 +44,15 @@ def test_ordinary_research_payload_is_not_rejected():
         "product": "any product", "destination": "Germany",
         "research": ["market size", "import statistics"]
     })
+
+from app.agent_runtime import _validate_agent_output
+
+
+def test_agent_output_requires_complete_schema_and_explicit_human_gate():
+    valid = {"status": "NEEDS_REVIEW", "findings": [], "sources": [],
+             "assumptions": [], "confidence": 50, "risks_and_holds": [],
+             "human_approval_required": True}
+    assert _validate_agent_output(valid)
+    assert not _validate_agent_output({**valid, "human_approval_required": False})
+    assert not _validate_agent_output({**valid, "confidence": 101})
+    assert not _validate_agent_output({"status": "COMPLETE"})
