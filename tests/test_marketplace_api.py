@@ -69,6 +69,16 @@ def test_buyer_supplier_discovery_and_ownership_lifecycle(tmp_path, monkeypatch)
     assert client.patch(f"/marketplace/requests/{request_id}", json=request,
                         headers=seller_headers).status_code == 403
 
+    updated_product = {**product, "capacity": "30 tonnes monthly"}
+    assert client.patch(f"/marketplace/products/{product_id}", json=updated_product,
+                        headers=seller_headers).status_code == 200
+    assert client.delete(f"/marketplace/products/{product_id}", headers=seller_headers).status_code == 200
+    assert all(item["id"] != product_id for item in client.get("/marketplace/products").json())
+
+    updated_request = {**request, "quantity": "12 tonnes"}
+    assert client.patch(f"/marketplace/requests/{request_id}", json=updated_request,
+                        headers=buyer_headers).status_code == 200
+
     assert client.post("/marketplace/logout", headers=seller_headers).status_code == 200
     assert client.get("/marketplace/me", headers=seller_headers).status_code == 401
 
