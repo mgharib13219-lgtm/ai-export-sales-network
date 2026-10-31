@@ -11,7 +11,7 @@ Human approval is required for binding offers, final price, contracts, payments,
 1. Copy `.env.example` to `.env`.
 2. Install dependencies: `pip install -r requirements.txt`.
 3. Start the app: `uvicorn app.main:app --host 0.0.0.0 --port 8000`.
-4. Open `/docs` for the API or `/` for the dashboard.
+4. Open `/docs` for the API, `/` for the operations dashboard, or `/market` for the public producer/buyer marketplace.
 
 ## Deploy to Render
 
@@ -31,3 +31,12 @@ Never commit API keys, SMTP passwords, or the production admin token. The integr
 - Buyer discovery requires a configured search provider; AI analysis requires a valid AI API key and model access.
 - Website/contact evidence is not proof of a buyer's legal identity. Validate important prospects before commercial commitments.
 - Production deployment and live delivery must be verified in the hosting environment; repository CI alone does not prove a live service is running.
+
+
+## Product-agnostic marketplace (MVP)
+
+The public `/market` page supports producer/buyer registration, login, product discovery, producer listings, and buyer sourcing requests. Authenticated producers can browse open requests and request an explainable match ranking. A match is only a discovery candidate: supplier identity, product claims/certificates, and destination compliance are not automatically verified. Users can edit/archive their own listings, edit/close their own requests, and revoke their current session.
+
+The specialist runtime is an admin-only, bounded research workflow. It has no model tool execution or automatic external side effects. Provider outputs are schema-checked and require human review. Approval records do not execute actions. Set a separate `AGENT_APPROVER_TOKEN` in the deployment environment if approval-ledger decisions are needed; do not reuse `ADMIN_TOKEN`.
+
+Marketplace authentication and verification remain MVP-grade: email verification, MFA, password recovery, shared-secret approver identity, independent document review, verified-transaction adjudication, sanctions-screening integrations, and full abuse/rate-limit controls remain launch blockers. Do not treat registration, listing, or match scores as trust certification.
