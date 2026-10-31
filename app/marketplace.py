@@ -18,7 +18,7 @@ from app.db import _con, _execute, _is_postgres, add_audit_event
 router = APIRouter(prefix="/marketplace", tags=["marketplace"])
 
 
-def _init_marketplace():
+def init_marketplace():
     con = _con()
     statements = [
         """CREATE TABLE IF NOT EXISTS marketplace_users (
@@ -142,11 +142,6 @@ def _current_user(authorization: Optional[str] = Header(default=None)):
 def _require_role(user, role):
     if user["role"] != role:
         raise HTTPException(403, "role_not_permitted")
-
-
-@router.on_event("startup")
-def marketplace_startup():
-    _init_marketplace()
 
 
 @router.post("/register")
