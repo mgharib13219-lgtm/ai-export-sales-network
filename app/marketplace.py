@@ -182,7 +182,7 @@ def register(data: Register):
     if role not in ("producer", "buyer"):
         raise HTTPException(422, "role_must_be_producer_or_buyer")
     email = data.email.strip().lower()
-    if not re.fullmatch(r"[^@\\s]+@[^@\\s]+\\.[^@\\s]+", email):
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
         raise HTTPException(422, "invalid_email")
     if len(data.company_name.strip()) < 2 or len(data.country.strip()) < 2:
         raise HTTPException(422, "company_name_and_country_required")
