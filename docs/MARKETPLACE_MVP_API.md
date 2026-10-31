@@ -9,6 +9,7 @@ public product discovery, buyer requests, verification requests, and feedback.
 - `POST /marketplace/login` — obtain a seven-day bearer session.
 - `GET /marketplace/me` — inspect the authenticated account.
 - `POST /marketplace/logout` — revoke the current bearer session.
+- `POST /marketplace/password` — change password and revoke all active sessions.
 - `POST /marketplace/products` — producers publish a product.
 - `PATCH /marketplace/products/{id}` — owner edits a published product.
 - `DELETE /marketplace/products/{id}` — owner archives a published product (soft delete).
@@ -25,11 +26,14 @@ public product discovery, buyer requests, verification requests, and feedback.
 ## Security and current limitations
 
 Passwords use salted PBKDF2-HMAC-SHA256; bearer tokens are stored as SHA-256
-hashes and expire after seven days. Producer-only and buyer-only actions are
-role-gated. Important events are written to the existing audit log.
+hashes and expire after seven days. Five invalid login attempts for an email/client
+pair within 15 minutes trigger a 15-minute lockout; limiter identifiers are hashed
+before persistence. Password changes revoke every active session. Producer-only and
+buyer-only actions are role-gated. Important events are written to the audit log.
 
 This is an MVP, not a complete production marketplace. It does not yet provide
-email verification, password reset, rate limiting, MFA, document upload/storage,
+email verification, password reset, MFA, distributed IP-wide rate limiting,
+document upload/storage,
 human verification review UI, transaction escrow, sanctions screening, dispute
 handling, or verified-transaction review adjudication. Do not treat account
 registration or a pending verification request as proof of company identity.
