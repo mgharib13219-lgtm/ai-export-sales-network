@@ -16,3 +16,5 @@ def test_public_marketplace_page_is_available_and_has_safe_dom_rendering():
     assert "textContent" in response.text
     assert "innerHTML" not in response.text
     assert "sessionStorage" in response.text
+    assert "changePassword" in response.text
+    assert "/marketplace/password" in response.text
