@@ -304,6 +304,8 @@ def task_detail(task_id: int):
 
 @router.post("/tasks/{task_id}/approval-requests", dependencies=[Depends(require_admin)])
 def request_action_approval(task_id: int, data: ApprovalRequest):
+    if _payload_exceeds_limits(data.action_payload) or len(_json(data.action_payload).encode("utf-8")) > 50000:
+        raise HTTPException(413, "approval_payload_exceeds_limits")
     task = _task_row(task_id)
     if not task:
         raise HTTPException(404, "agent_task_not_found")
@@ -340,9 +342,13 @@ def decide_approval(approval_id: int, data: ApprovalDecision,
         con.close()
         raise HTTPException(409, "approval_already_decided")
     status = "approved" if data.approved else "rejected"
-    _execute(con, """UPDATE agent_approvals SET status=?,reviewed_by=?,review_note=?,reviewed_at=?
+    cur = _execute(con, """UPDATE agent_approvals SET status=?,reviewed_by=?,review_note=?,reviewed_at=?
         WHERE id=? AND status='pending'""",
         (status, x_approver_id.strip(), data.note, _now(), approval_id))
+    if cur.rowcount != 1:
+        con.rollback()
+        con.close()
+        raise HTTPException(409, "approval_already_decided")
     con.commit()
     con.close()
     add_audit_event("agent_work.approval_decided", x_approver_id.strip(), str(approval_id),
