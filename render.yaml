@@ -15,6 +15,10 @@ services:
         value: 10000
       - key: ADMIN_TOKEN
         sync: false
+      - key: AGENT_APPROVER_TOKEN
+        sync: false
+      - key: AGENT_CRON_TOKEN
+        sync: false
       - key: AI_PROVIDER
         value: openai
       - key: AI_API_KEY
