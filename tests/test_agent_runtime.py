@@ -56,3 +56,16 @@ def test_agent_output_requires_complete_schema_and_explicit_human_gate():
     assert not _validate_agent_output({**valid, "human_approval_required": False})
     assert not _validate_agent_output({**valid, "confidence": 101})
     assert not _validate_agent_output({"status": "COMPLETE"})
+
+from app.agent_runtime import _payload_exceeds_limits
+
+
+def test_agent_payload_depth_and_size_are_bounded():
+    assert not _payload_exceeds_limits({"product": "generic goods"})
+    assert _payload_exceeds_limits({"text": "x" * 10001})
+    nested = {}
+    cursor = nested
+    for _ in range(12):
+        cursor["next"] = {}
+        cursor = cursor["next"]
+    assert _payload_exceeds_limits(nested)
