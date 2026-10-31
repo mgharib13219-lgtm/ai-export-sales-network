@@ -7,6 +7,7 @@ claim that a company or its products are verified.
 import hashlib
 import hmac
 import secrets
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -109,8 +110,8 @@ class Register(BaseModel):
 
 
 class Login(BaseModel):
-    email: str
-    password: str
+    email: str = Field(min_length=5, max_length=254)
+    password: str = Field(min_length=1, max_length=200)
 
 
 class PasswordChange(BaseModel):
@@ -181,8 +182,10 @@ def register(data: Register):
     if role not in ("producer", "buyer"):
         raise HTTPException(422, "role_must_be_producer_or_buyer")
     email = data.email.strip().lower()
-    if "@" not in email or email.startswith("@") or email.endswith("@"):
+    if not re.fullmatch(r"[^@\\s]+@[^@\\s]+\\.[^@\\s]+", email):
         raise HTTPException(422, "invalid_email")
+    if len(data.company_name.strip()) < 2 or len(data.country.strip()) < 2:
+        raise HTTPException(422, "company_name_and_country_required")
     con = _con()
     try:
         user_id = _id_insert(con,
@@ -294,6 +297,8 @@ def logout(authorization: Optional[str] = Header(default=None), user=Depends(_cu
 @router.post("/products")
 def create_product(data: ProductListing, user=Depends(_current_user)):
     _require_role(user, "producer")
+    if any(len(value.strip()) < 2 for value in (data.name, data.category, data.origin)) or len(data.description.strip()) < 10:
+        raise HTTPException(422, "product_fields_must_not_be_blank")
     con = _con()
     product_id = _id_insert(con, """INSERT INTO marketplace_products
         (owner_id,name,category,description,origin,capacity,moq,target_markets)
@@ -310,6 +315,8 @@ def create_product(data: ProductListing, user=Depends(_current_user)):
 @router.patch("/products/{product_id}")
 def update_product(product_id: int, data: ProductListing, user=Depends(_current_user)):
     _require_role(user, "producer")
+    if any(len(value.strip()) < 2 for value in (data.name, data.category, data.origin)) or len(data.description.strip()) < 10:
+        raise HTTPException(422, "product_fields_must_not_be_blank")
     con = _con()
     cur = _execute(con, """UPDATE marketplace_products SET name=?,category=?,description=?,
         origin=?,capacity=?,moq=?,target_markets=? WHERE id=? AND owner_id=? AND status='published'""",
