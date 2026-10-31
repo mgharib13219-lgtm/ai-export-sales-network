@@ -15,6 +15,7 @@ from app.agent_roles import ROLES, build_system_prompt
 from app.auth import require_admin
 from app.db import _con, _execute, _is_postgres, add_audit_event
 from app.providers import ai_provider
+from app.settings import settings
 
 router = APIRouter(prefix="/agent-work", tags=["agent-work"])
 
@@ -255,7 +256,14 @@ def request_action_approval(task_id: int, data: ApprovalRequest):
 
 @router.post("/approvals/{approval_id}/decision", dependencies=[Depends(require_admin)])
 def decide_approval(approval_id: int, data: ApprovalDecision,
-                    x_approver_id: Optional[str] = Header(default=None)):
+                    x_approver_id: Optional[str] = Header(default=None),
+                    x_approver_token: Optional[str] = Header(default=None)):
+    approver_token = Header(default=None)
+    if not settings.agent_approver_token:
+        raise HTTPException(503, "AGENT_APPROVER_TOKEN_not_configured")
+    import hmac
+    if not x_approver_token or not hmac.compare_digest(settings.agent_approver_token, x_approver_token):
+        raise HTTPException(401, "invalid_approver_token")
     if not x_approver_id or len(x_approver_id.strip()) < 3:
         raise HTTPException(400, "named_approver_required")
     con = _con()
