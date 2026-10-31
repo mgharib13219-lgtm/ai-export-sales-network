@@ -10,6 +10,8 @@ public product discovery, buyer requests, verification requests, and feedback.
 - `GET /marketplace/me` — inspect the authenticated account.
 - `POST /marketplace/logout` — revoke the current bearer session.
 - `POST /marketplace/products` — producers publish a product.
+- `PATCH /marketplace/products/{id}` — owner edits a published product.
+- `DELETE /marketplace/products/{id}` — owner archives a published product (soft delete).
 - `GET /marketplace/products?q=&category=` — public product search.
 - `POST /marketplace/requests` — buyers publish a sourcing request.
 - `GET /marketplace/requests` — authenticated producers browse requests.
