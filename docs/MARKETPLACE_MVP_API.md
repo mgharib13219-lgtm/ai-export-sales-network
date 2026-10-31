@@ -18,7 +18,10 @@ public product discovery, buyer requests, verification requests, and feedback.
 - `PATCH /marketplace/requests/{id}` — buyer edits their own open request.
 - `DELETE /marketplace/requests/{id}` — buyer closes their own open request.
 - `GET /marketplace/requests` — authenticated producers browse open requests only.
-- `POST /marketplace/verification` — request a review of company credentials.
+- `POST /marketplace/verification` — request a review of a specific evidence type.
+- `GET /marketplace/verification/pending` — admin queue for manual review.
+- `PATCH /marketplace/verification/{id}` — admin records approved, rejected, or more-info-required; applies only to that evidence type.
+- `GET /marketplace/profiles/{user_id}/verification` — public list of scoped verification statuses, never a blanket verified badge.
 - `POST /marketplace/reviews` — leave feedback; it is always marked unverified
   until a future evidence-review process confirms an underlying transaction.
 - `GET /marketplace/profiles/{user_id}/reviews` — public profile feedback.
@@ -33,7 +36,7 @@ buyer-only actions are role-gated. Important events are written to the audit log
 This is an MVP, not a complete production marketplace. It does not yet provide
 email verification, password reset, MFA, distributed IP-wide rate limiting,
 document upload/storage,
-human verification review UI, transaction escrow, sanctions screening, dispute
+ transaction escrow, sanctions screening, dispute
 handling, or verified-transaction review adjudication. Do not treat account
 registration or a pending verification request as proof of company identity.
 
