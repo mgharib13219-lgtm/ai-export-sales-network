@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import app.marketplace as marketplace
+from app.auth import require_admin
 
 
 def _client(tmp_path, monkeypatch):
@@ -20,6 +21,7 @@ def _client(tmp_path, monkeypatch):
     marketplace.init_marketplace()
     app = FastAPI()
     app.include_router(marketplace.router)
+    app.dependency_overrides[require_admin] = lambda: True
     return TestClient(app)
 
 
@@ -150,3 +152,25 @@ def test_marketplace_search_rejects_unbounded_query_and_page_size(tmp_path, monk
     client = _client(tmp_path, monkeypatch)
     assert client.get("/marketplace/products?q=" + "x" * 121).status_code == 422
     assert client.get("/marketplace/products?limit=100000").status_code == 422
+
+def test_verification_review_is_human_audited_and_not_blanket_certification(tmp_path, monkeypatch):
+    client = _client(tmp_path, monkeypatch)
+    producer_headers = _register_and_login(client, "producer", "verify@example.com")
+    created = client.post("/marketplace/verification", headers=producer_headers, json={
+        "verification_type": "company_registration", "notes": "Registry document reference"
+    })
+    verification_id = created.json()["verification_id"]
+    pending = client.get("/marketplace/verification/pending")
+    assert pending.status_code == 200
+    assert any(item["id"] == verification_id for item in pending.json())
+    decision = client.patch(f"/marketplace/verification/{verification_id}", json={
+        "status": "approved", "notes": "Registry record manually checked"
+    })
+    assert decision.status_code == 200
+    summary = client.get(f"/marketplace/profiles/{created_user_id(client, producer_headers)}/verification")
+    assert summary.status_code == 200
+    assert summary.json()["blanket_verified"] is False
+    assert summary.json()["verification_items"][0]["status"] == "approved"
+
+def created_user_id(client, headers):
+    return client.get("/marketplace/me", headers=headers).json()["id"]
