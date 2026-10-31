@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from app.db import _con, _execute, _is_postgres, add_audit_event
+from app.auth import require_admin
 from app.marketplace_matching import rank_listings_for_request
 
 router = APIRouter(prefix="/marketplace", tags=["marketplace"])
@@ -137,6 +138,11 @@ class BuyRequest(BaseModel):
 
 class VerificationRequest(BaseModel):
     verification_type: str = Field(min_length=3, max_length=80)
+    notes: str = Field(default="", max_length=2000)
+
+
+class VerificationDecision(BaseModel):
+    status: str = Field(min_length=5, max_length=30)
     notes: str = Field(default="", max_length=2000)
 
 
@@ -431,6 +437,55 @@ def request_verification(data: VerificationRequest, user=Depends(_current_user))
     return {"verification_id": verification_id, "status": "pending",
             "note": "No verification badge is granted until evidence is reviewed by an authorized reviewer."}
 
+
+@router.get("/verification/pending", dependencies=[Depends(require_admin)])
+def pending_verifications(limit: int = Query(default=100, ge=1, le=300)):
+    con = _con()
+    rows = _execute(con, """SELECT v.id,v.user_id,v.verification_type,v.status,v.notes,v.created_at,
+        u.email,u.company_name,u.country FROM marketplace_verifications v
+        JOIN marketplace_users u ON u.id=v.user_id WHERE v.status='pending'
+        ORDER BY v.id ASC LIMIT ?""", (limit,)).fetchall()
+    con.close()
+    return [dict(row) for row in rows]
+
+@router.patch("/verification/{verification_id}", dependencies=[Depends(require_admin)])
+def review_verification(verification_id: int, data: VerificationDecision):
+    status = data.status.strip().lower()
+    if status not in {"approved", "rejected", "more_info_required"}:
+        raise HTTPException(422, "invalid_verification_decision")
+    con = _con()
+    row = _execute(con, "SELECT id,user_id,status FROM marketplace_verifications WHERE id=?", (verification_id,)).fetchone()
+    if not row:
+        con.close()
+        raise HTTPException(404, "verification_request_not_found")
+    if row["status"] != "pending":
+        con.close()
+        raise HTTPException(409, "verification_request_already_reviewed")
+    cur = _execute(con, "UPDATE marketplace_verifications SET status=?,notes=?,reviewed_at=? WHERE id=? AND status='pending'",
+                   (status, data.notes, datetime.now(timezone.utc).isoformat(), verification_id))
+    if cur.rowcount != 1:
+        con.rollback()
+        con.close()
+        raise HTTPException(409, "verification_request_already_reviewed")
+    con.commit()
+    con.close()
+    add_audit_event("marketplace.verification_reviewed", "admin", str(verification_id),
+                    "verification", str(verification_id), {"status": status, "user_id": row["user_id"]})
+    return {"verification_id": verification_id, "status": status,
+            "note": "This decision applies only to the submitted verification type; it is not blanket company or product certification."}
+
+@router.get("/profiles/{user_id}/verification")
+def profile_verification_status(user_id: int):
+    con = _con()
+    exists = _execute(con, "SELECT id FROM marketplace_users WHERE id=?", (user_id,)).fetchone()
+    if not exists:
+        con.close()
+        raise HTTPException(404, "profile_not_found")
+    rows = _execute(con, "SELECT verification_type,status,reviewed_at,created_at FROM marketplace_verifications WHERE user_id=? ORDER BY id DESC LIMIT 100",
+                    (user_id,)).fetchall()
+    con.close()
+    return {"user_id": user_id, "verification_items": [dict(row) for row in rows],
+            "blanket_verified": False}
 
 @router.post("/reviews")
 def create_review(data: ReviewCreate, user=Depends(_current_user)):
