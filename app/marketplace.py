@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from app.db import _con, _execute, _is_postgres, add_audit_event
+from app.marketplace_matching import rank_listings_for_request
 
 router = APIRouter(prefix="/marketplace", tags=["marketplace"])
 
@@ -301,3 +302,23 @@ def profile_reviews(user_id: int):
         WHERE r.subject_user_id=? ORDER BY r.id DESC LIMIT 100""", (user_id,)).fetchall()
     con.close()
     return [dict(r) for r in rows]
+
+
+@router.get("/matches/requests/{request_id}")
+def match_request_to_products(request_id: int, user=Depends(_current_user)):
+    """Return explainable discovery candidates; never represents a match as verified."""
+    _require_role(user, "producer")
+    con = _con()
+    request_row = _execute(con, "SELECT * FROM marketplace_requests WHERE id=? AND status='open'",
+                           (request_id,)).fetchone()
+    if not request_row:
+        con.close()
+        raise HTTPException(404, "open_buy_request_not_found")
+    listings = _execute(con, """SELECT p.id,p.name,p.category,p.description,p.origin,p.capacity,p.moq,
+        p.target_markets,u.company_name,u.country
+        FROM marketplace_products p JOIN marketplace_users u ON u.id=p.owner_id
+        WHERE p.status='published' ORDER BY p.id DESC LIMIT 500""").fetchall()
+    con.close()
+    matches = rank_listings_for_request(dict(request_row), [dict(row) for row in listings])
+    return {"request_id": request_id, "matches": matches,
+            "note": "Discovery ranking only. Identity, product claims, certificates and destination compliance remain unverified."}
