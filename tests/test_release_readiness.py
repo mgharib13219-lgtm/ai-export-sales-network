@@ -41,3 +41,10 @@ def test_ready_endpoint_does_not_disclose_database_exception(monkeypatch):
     assert response.status_code == 503
     assert "private-host" not in response.text
     assert "password" not in response.text
+
+
+def test_system_readiness_requires_admin_authentication():
+    app = FastAPI()
+    app.include_router(main.app.router)
+    response = TestClient(app).get("/system/readiness")
+    assert response.status_code == 401
