@@ -192,6 +192,19 @@ def me(user=Depends(_current_user)):
     return user
 
 
+@router.post("/logout")
+def logout(authorization: Optional[str] = Header(default=None), user=Depends(_current_user)):
+    token = authorization[7:].strip()
+    con = _con()
+    _execute(con, "DELETE FROM marketplace_sessions WHERE token_hash=?",
+             (hashlib.sha256(token.encode()).hexdigest(),))
+    con.commit()
+    con.close()
+    add_audit_event("marketplace.session_revoked", user["email"], str(user["id"]),
+                    "user", str(user["id"]), {"reason": "user_logout"})
+    return {"status": "logged_out"}
+
+
 @router.post("/products")
 def create_product(data: ProductListing, user=Depends(_current_user)):
     _require_role(user, "producer")
