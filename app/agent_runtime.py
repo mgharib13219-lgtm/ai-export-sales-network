@@ -258,7 +258,6 @@ def request_action_approval(task_id: int, data: ApprovalRequest):
 def decide_approval(approval_id: int, data: ApprovalDecision,
                     x_approver_id: Optional[str] = Header(default=None),
                     x_approver_token: Optional[str] = Header(default=None)):
-    approver_token = Header(default=None)
     if not settings.agent_approver_token:
         raise HTTPException(503, "AGENT_APPROVER_TOKEN_not_configured")
     import hmac
