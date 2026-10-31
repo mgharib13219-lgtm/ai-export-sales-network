@@ -221,6 +221,38 @@ def create_product(data: ProductListing, user=Depends(_current_user)):
     return {"product_id": product_id, "status": "published"}
 
 
+@router.patch("/products/{product_id}")
+def update_product(product_id: int, data: ProductListing, user=Depends(_current_user)):
+    _require_role(user, "producer")
+    con = _con()
+    cur = _execute(con, """UPDATE marketplace_products SET name=?,category=?,description=?,
+        origin=?,capacity=?,moq=?,target_markets=? WHERE id=? AND owner_id=? AND status='published'""",
+        (data.name, data.category, data.description, data.origin, data.capacity, data.moq,
+         data.target_markets, product_id, user["id"]))
+    con.commit()
+    con.close()
+    if cur.rowcount != 1:
+        raise HTTPException(404, "published_product_not_found_or_not_owned")
+    add_audit_event("marketplace.product_updated", user["email"], str(product_id),
+                    "product", str(product_id), {"owner_id": user["id"]})
+    return {"product_id": product_id, "status": "updated"}
+
+
+@router.delete("/products/{product_id}")
+def archive_product(product_id: int, user=Depends(_current_user)):
+    _require_role(user, "producer")
+    con = _con()
+    cur = _execute(con, """UPDATE marketplace_products SET status='archived'
+        WHERE id=? AND owner_id=? AND status='published'""", (product_id, user["id"]))
+    con.commit()
+    con.close()
+    if cur.rowcount != 1:
+        raise HTTPException(404, "published_product_not_found_or_not_owned")
+    add_audit_event("marketplace.product_archived", user["email"], str(product_id),
+                    "product", str(product_id), {"owner_id": user["id"]})
+    return {"product_id": product_id, "status": "archived"}
+
+
 @router.get("/products")
 def list_products(q: Optional[str] = None, category: Optional[str] = None, limit: int = 50):
     limit = max(1, min(limit, 100))
