@@ -114,7 +114,11 @@ def health(): return {'status':'ok','service':'ai-export-sales-network','version
 def ready():
     try:
         from app.db import _con, _execute
-        con = _con(); _execute(con, 'SELECT 1').fetchone(); con.close()
+        con = _con()
+        try:
+            _execute(con, 'SELECT 1').fetchone()
+        finally:
+            con.close()
         return {'status':'ready','database':'ok','version':settings.app_version}
     except Exception:
         # Do not expose connection strings, hostnames, SQL, or driver details publicly.
@@ -124,11 +128,17 @@ def ready():
 @app.get('/system/readiness', dependencies=[Depends(require_admin)])
 def system_readiness():
     """Return an operator checklist without exposing secret values."""
+    ai_mode = (settings.ai_provider or 'none').lower()
+    active_ai = (
+        (ai_mode in ('openai', 'ensemble') and bool(settings.ai_api_key)) or
+        (ai_mode in ('anthropic', 'ensemble') and bool(getattr(settings, 'anthropic_api_key', ''))) or
+        (ai_mode in ('gemini', 'ensemble') and bool(getattr(settings, 'gemini_api_key', '')))
+    )
     checks = {
         'admin_token': bool(settings.admin_token),
         'database_url': bool(settings.database_url),
         'postgres_in_production': settings.environment.lower() != 'production' or settings.database_url.startswith(('postgres://', 'postgresql://')),
-        'ai_provider': bool(settings.ai_api_key or getattr(settings, 'anthropic_api_key', '') or getattr(settings, 'gemini_api_key', '')),
+        'ai_provider': active_ai,
         'search_provider': bool(settings.search_api_key) and (settings.search_provider or '').lower() == 'serpapi',
         'agent_approver_token': bool(settings.agent_approver_token),
         'agent_cron_token': bool(settings.agent_cron_token),
