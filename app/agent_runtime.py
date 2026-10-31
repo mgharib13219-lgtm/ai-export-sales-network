@@ -269,6 +269,23 @@ def execute_task(task_id: int):
     return run_task(task_id)
 
 
+@router.post("/tasks/{task_id}/cancel", dependencies=[Depends(require_admin)])
+def cancel_task(task_id: int):
+    con = _con()
+    cur = _execute(con, """UPDATE agent_tasks SET status='cancelled',finished_at=?
+        WHERE id=? AND status='queued'""", (_now(), task_id))
+    con.commit()
+    con.close()
+    if cur.rowcount != 1:
+        task = _task_row(task_id)
+        if not task:
+            raise HTTPException(404, "agent_task_not_found")
+        raise HTTPException(409, "only_queued_tasks_can_be_cancelled")
+    add_audit_event("agent_work.task_cancelled", "admin", str(task_id),
+                    "agent_task", str(task_id), {"status": "cancelled"})
+    return {"task_id": task_id, "status": "cancelled"}
+
+
 @router.get("/tasks/{task_id}", dependencies=[Depends(require_admin)])
 def task_detail(task_id: int):
     task = _task_row(task_id)
