@@ -88,6 +88,21 @@ def _json(value):
     return json.dumps(value, ensure_ascii=False, default=str)
 
 
+def _contains_side_effect_instruction(value):
+    # Reject obvious action directives at any nesting depth; runtime still has no tools.
+    forbidden = {"sendemail", "sendmessage", "makepayment", "signcontract",
+                 "placeorder", "publishlisting", "issuequote", "bookshipment",
+                 "transferfunds", "contactbuyer", "contactsupplier"}
+    if isinstance(value, dict):
+        for key, child in value.items():
+            normalized = "".join(ch for ch in str(key).casefold() if ch.isalnum())
+            if normalized in forbidden or _contains_side_effect_instruction(child):
+                return True
+    elif isinstance(value, (list, tuple)):
+        return any(_contains_side_effect_instruction(item) for item in value)
+    return False
+
+
 def _run_role(role_key, task_type, payload):
     role = next((r for r in ROLES if r.key == role_key), None)
     if not role:
@@ -162,7 +177,10 @@ def run_task(task_id: int):
             con.commit()
             con.close()
             steps.append(result)
-            if result["status"] == "BLOCKED":
+            if result["status"] == "BLOCKED" or (
+                role_key == "compliance" and result["status"] == "INSUFFICIENT_EVIDENCE"
+            ):
+                # A compliance provider failure must not allow later workflow steps.
                 blocked = True
                 break
         final = {"status": "BLOCKED" if blocked else "NEEDS_REVIEW",
@@ -199,8 +217,7 @@ def create_task(data: TaskCreate):
     allowed = {r.key for r in ROLES}
     if not data.roles or len(set(data.roles)) != len(data.roles) or any(r not in allowed for r in data.roles):
         raise HTTPException(422, "invalid_or_duplicate_agent_role")
-    if any(k.lower() in {"send_email", "send_message", "make_payment", "sign_contract", "place_order"}
-           for k in data.payload):
+    if _contains_side_effect_instruction(data.payload):
         raise HTTPException(422, "side_effect_instruction_not_allowed")
     task_key = secrets.token_urlsafe(24)
     payload = dict(data.payload)
