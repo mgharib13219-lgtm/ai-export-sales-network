@@ -178,3 +178,11 @@ def test_verification_review_is_human_audited_and_not_blanket_certification(tmp_
 
 def created_user_id(client, headers):
     return client.get("/marketplace/me", headers=headers).json()["id"]
+
+def test_verification_type_must_be_explicitly_scoped(tmp_path, monkeypatch):
+    client = _client(tmp_path, monkeypatch)
+    headers = _register_and_login(client, "producer", "verify-scope@example.com")
+    response = client.post("/marketplace/verification", headers=headers, json={
+        "verification_type": "fully_verified_company", "notes": "Please verify everything"
+    })
+    assert response.status_code == 422
