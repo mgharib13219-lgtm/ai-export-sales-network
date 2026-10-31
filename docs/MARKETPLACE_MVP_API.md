@@ -16,7 +16,7 @@ public product discovery, buyer requests, verification requests, and feedback.
 - `POST /marketplace/requests` — buyers publish a sourcing request.
 - `PATCH /marketplace/requests/{id}` — buyer edits their own open request.
 - `DELETE /marketplace/requests/{id}` — buyer closes their own open request.
-- `GET /marketplace/requests` — authenticated producers browse requests.
+- `GET /marketplace/requests` — authenticated producers browse open requests only.
 - `POST /marketplace/verification` — request a review of company credentials.
 - `POST /marketplace/reviews` — leave feedback; it is always marked unverified
   until a future evidence-review process confirms an underlying transaction.
