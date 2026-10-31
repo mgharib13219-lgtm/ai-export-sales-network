@@ -8,6 +8,7 @@ public product discovery, buyer requests, verification requests, and feedback.
 - `POST /marketplace/register` — create a producer or buyer account.
 - `POST /marketplace/login` — obtain a seven-day bearer session.
 - `GET /marketplace/me` — inspect the authenticated account.
+- `POST /marketplace/logout` — revoke the current bearer session.
 - `POST /marketplace/products` — producers publish a product.
 - `GET /marketplace/products?q=&category=` — public product search.
 - `POST /marketplace/requests` — buyers publish a sourcing request.
