@@ -116,8 +116,51 @@ def ready():
         from app.db import _con, _execute
         con = _con(); _execute(con, 'SELECT 1').fetchone(); con.close()
         return {'status':'ready','database':'ok','version':settings.app_version}
-    except Exception as exc:
-        raise HTTPException(status_code=503, detail={'status':'not_ready','database':'error','error':str(exc)})
+    except Exception:
+        # Do not expose connection strings, hostnames, SQL, or driver details publicly.
+        raise HTTPException(status_code=503, detail={'status':'not_ready','database':'error'})
+
+
+@app.get('/system/readiness', dependencies=[Depends(require_admin)])
+def system_readiness():
+    """Return an operator checklist without exposing secret values."""
+    checks = {
+        'admin_token': bool(settings.admin_token),
+        'database_url': bool(settings.database_url),
+        'postgres_in_production': settings.environment.lower() != 'production' or settings.database_url.startswith(('postgres://', 'postgresql://')),
+        'ai_provider': bool(settings.ai_api_key or getattr(settings, 'anthropic_api_key', '') or getattr(settings, 'gemini_api_key', '')),
+        'search_provider': bool(settings.search_api_key) and (settings.search_provider or '').lower() == 'serpapi',
+        'agent_approver_token': bool(settings.agent_approver_token),
+        'agent_cron_token': bool(settings.agent_cron_token),
+        'smtp_credentials': all((getattr(settings, 'smtp_host', ''), getattr(settings, 'smtp_user', ''), getattr(settings, 'smtp_password', ''))) and (settings.email_provider or '').lower() == 'smtp',
+    }
+    blockers = []
+    if not checks['admin_token']:
+        blockers.append('configure_ADMIN_TOKEN')
+    if not checks['database_url']:
+        blockers.append('configure_DATABASE_URL')
+    if not checks['postgres_in_production']:
+        blockers.append('production_requires_PostgreSQL')
+    if not checks['ai_provider']:
+        blockers.append('configure_at_least_one_AI_provider')
+    if not checks['search_provider']:
+        blockers.append('configure_SEARCH_PROVIDER_and_SEARCH_API_KEY')
+    if not checks['agent_approver_token']:
+        blockers.append('configure_separate_AGENT_APPROVER_TOKEN_for_approval_ledger')
+    if not checks['agent_cron_token']:
+        blockers.append('configure_matching_AGENT_CRON_TOKEN_in_host_and_scheduler')
+    if not checks['smtp_credentials']:
+        blockers.append('configure_SMTP_for_email_delivery_or_keep_drafts_only')
+    return {
+        'status': 'ready_for_final_test' if not blockers else 'action_required',
+        'checks': checks,
+        'blockers': blockers,
+        'notes': [
+            'Configured credentials are not proof that external providers accept them.',
+            'A successful readiness response does not prove DNS, TLS, deployment, or end-to-end delivery.',
+            'No external buyer/supplier contact or commercial commitment is performed by this check.'
+        ]
+    }
 
 @app.get('/system/integrations', dependencies=[Depends(require_admin)])
 def integration_status():
