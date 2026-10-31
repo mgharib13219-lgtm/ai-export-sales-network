@@ -214,8 +214,12 @@ def _check_login_lock(con, attempt_key: str, now: datetime):
     if not row:
         return
     locked_until = row["locked_until"]
-    if locked_until and str(locked_until) > now.isoformat():
-        raise HTTPException(429, "login_temporarily_locked")
+    if locked_until:
+        locked_at = datetime.fromisoformat(str(locked_until).replace("Z", "+00:00"))
+        if locked_at.tzinfo is None:
+            locked_at = locked_at.replace(tzinfo=timezone.utc)
+        if locked_at > now:
+            raise HTTPException(429, "login_temporarily_locked")
     started = datetime.fromisoformat(str(row["window_started_at"]).replace("Z", "+00:00"))
     if (now - started).total_seconds() > 900:
         _execute(con, "DELETE FROM marketplace_login_attempts WHERE attempt_key=?", (attempt_key,))
