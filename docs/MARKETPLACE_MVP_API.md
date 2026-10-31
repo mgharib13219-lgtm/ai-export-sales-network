@@ -26,9 +26,8 @@ public product discovery, buyer requests, verification requests, and feedback.
 ## Security and current limitations
 
 Passwords use salted PBKDF2-HMAC-SHA256; bearer tokens are stored as SHA-256
-hashes and expire after seven days. Five invalid login attempts for an email/client
-pair within 15 minutes trigger a 15-minute lockout; limiter identifiers are hashed
-before persistence. Password changes revoke every active session. Producer-only and
+hashes and expire after seven days. Five invalid login attempts for an account or client address within 15 minutes
+trigger a 15-minute lockout; limiter identifiers are hashed before persistence. Password changes revoke every active session. Producer-only and
 buyer-only actions are role-gated. Important events are written to the audit log.
 
 This is an MVP, not a complete production marketplace. It does not yet provide
