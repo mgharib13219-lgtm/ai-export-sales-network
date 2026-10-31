@@ -103,6 +103,20 @@ def _validate_agent_output(value):
             return False
     return True
 
+def _payload_exceeds_limits(value, depth=0):
+    if depth > 10:
+        return True
+    if isinstance(value, str):
+        return len(value) > 10000
+    if isinstance(value, dict):
+        return len(value) > 200 or any(
+            _payload_exceeds_limits(k, depth + 1) or _payload_exceeds_limits(v, depth + 1)
+            for k, v in value.items()
+        )
+    if isinstance(value, (list, tuple)):
+        return len(value) > 200 or any(_payload_exceeds_limits(item, depth + 1) for item in value)
+    return False
+
 def _contains_side_effect_instruction(value):
     # Reject obvious action directives at any nesting depth; runtime still has no tools.
     forbidden = {"sendemail", "sendmessage", "makepayment", "signcontract",
@@ -233,6 +247,8 @@ def create_task(data: TaskCreate):
     allowed = {r.key for r in ROLES}
     if not data.roles or len(set(data.roles)) != len(data.roles) or any(r not in allowed for r in data.roles):
         raise HTTPException(422, "invalid_or_duplicate_agent_role")
+    if _payload_exceeds_limits(data.payload) or len(_json(data.payload).encode("utf-8")) > 50000:
+        raise HTTPException(413, "agent_payload_exceeds_limits")
     if _contains_side_effect_instruction(data.payload):
         raise HTTPException(422, "side_effect_instruction_not_allowed")
     task_key = secrets.token_urlsafe(24)
