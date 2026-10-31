@@ -43,7 +43,12 @@ def test_ready_endpoint_does_not_disclose_database_exception(monkeypatch):
     assert "password" not in response.text
 
 
-def test_system_readiness_requires_admin_authentication():
+def test_system_readiness_requires_admin_authentication(monkeypatch):
+    import app.auth as auth
+
+    monkeypatch.setattr(auth, "settings", SimpleNamespace(
+        environment="production", admin_token="test-admin-secret"
+    ))
     app = FastAPI()
     app.include_router(main.app.router)
     response = TestClient(app).get("/system/readiness")
