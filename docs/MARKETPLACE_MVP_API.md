@@ -14,6 +14,8 @@ public product discovery, buyer requests, verification requests, and feedback.
 - `DELETE /marketplace/products/{id}` — owner archives a published product (soft delete).
 - `GET /marketplace/products?q=&category=` — public product search.
 - `POST /marketplace/requests` — buyers publish a sourcing request.
+- `PATCH /marketplace/requests/{id}` — buyer edits their own open request.
+- `DELETE /marketplace/requests/{id}` — buyer closes their own open request.
 - `GET /marketplace/requests` — authenticated producers browse requests.
 - `POST /marketplace/verification` — request a review of company credentials.
 - `POST /marketplace/reviews` — leave feedback; it is always marked unverified
