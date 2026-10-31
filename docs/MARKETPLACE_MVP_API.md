@@ -18,7 +18,7 @@ public product discovery, buyer requests, verification requests, and feedback.
 - `PATCH /marketplace/requests/{id}` — buyer edits their own open request.
 - `DELETE /marketplace/requests/{id}` — buyer closes their own open request.
 - `GET /marketplace/requests` — authenticated producers browse open requests only.
-- `POST /marketplace/verification` — request a review of a specific evidence type.
+- `POST /marketplace/verification` — request a review of one supported evidence type: company identity/registration, representative authority, product/quality certificate, export license, bank-account ownership, or facility audit.
 - `GET /marketplace/verification/pending` — admin queue for manual review.
 - `PATCH /marketplace/verification/{id}` — admin records approved, rejected, or more-info-required; applies only to that evidence type.
 - `GET /marketplace/profiles/{user_id}/verification` — public list of scoped verification statuses, never a blanket verified badge.
