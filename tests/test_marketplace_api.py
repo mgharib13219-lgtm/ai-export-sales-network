@@ -171,6 +171,10 @@ def test_verification_review_is_human_audited_and_not_blanket_certification(tmp_
     assert summary.status_code == 200
     assert summary.json()["blanket_verified"] is False
     assert summary.json()["verification_items"][0]["status"] == "approved"
+    assert client.patch(f"/marketplace/verification/{verification_id}", json={
+        "status": "rejected", "notes": "Second decision must not overwrite the first"}).status_code == 409
+    assert client.patch(f"/marketplace/verification/{verification_id}", json={
+        "status": "verified_anything", "notes": "Invalid status"}).status_code == 422
 
 def created_user_id(client, headers):
     return client.get("/marketplace/me", headers=headers).json()["id"]
