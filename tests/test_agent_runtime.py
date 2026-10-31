@@ -69,3 +69,8 @@ def test_agent_payload_depth_and_size_are_bounded():
         cursor["next"] = {}
         cursor = cursor["next"]
     assert _payload_exceeds_limits(nested)
+
+def test_approval_payload_limits_share_task_input_guards():
+    from app.agent_runtime import _payload_exceeds_limits
+    assert not _payload_exceeds_limits({"action": "review_only"})
+    assert _payload_exceeds_limits({"document": "x" * 10001})
