@@ -35,7 +35,7 @@ Never commit API keys, SMTP passwords, or the production admin token. The integr
 
 ## Product-agnostic marketplace (MVP)
 
-The public `/market` page supports producer/buyer registration, login, product discovery, producer listings, and buyer sourcing requests. Authenticated producers can browse open requests and request an explainable match ranking. A match is only a discovery candidate: supplier identity, product claims/certificates, and destination compliance are not automatically verified. Users can edit/archive their own listings, edit/close their own requests, and revoke their current session.
+The public `/market` page supports producer/buyer registration, login, product discovery, producer listings, and buyer sourcing requests. Authenticated producers can browse open requests and request an explainable match ranking. A match is only a discovery candidate: supplier identity, product claims/certificates, and destination compliance are not automatically verified. Users can edit/archive their own listings, edit/close their own requests, change their password (revoking all sessions), and revoke their current session. Repeated invalid login attempts trigger account- and client-address lockouts. Administrators can review scoped verification requests; a review never creates a blanket company/product certification.
 
 The specialist runtime is an admin-only, bounded research workflow. It has no model tool execution or automatic external side effects. Provider outputs are schema-checked and require human review. Approval records do not execute actions. Set a separate `AGENT_APPROVER_TOKEN` in the deployment environment if approval-ledger decisions are needed; do not reuse `ADMIN_TOKEN`.
 
