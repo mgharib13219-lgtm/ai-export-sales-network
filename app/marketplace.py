@@ -322,7 +322,7 @@ def close_buy_request(request_id: int, user=Depends(_current_user)):
 @router.get("/requests")
 def list_requests(category: Optional[str] = None, limit: int = 50, user=Depends(_current_user)):
     _require_role(user, "producer")
-    clauses, values = [], []
+    clauses, values = ["status='open'"], []
     if category:
         clauses.append("LOWER(category)=?")
         values.append(category.lower())
