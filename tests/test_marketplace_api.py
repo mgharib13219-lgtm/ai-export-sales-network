@@ -134,3 +134,14 @@ def test_login_unknown_account_uses_same_generic_error(tmp_path, monkeypatch):
     })
     assert response.status_code == 401
     assert response.json()["detail"] == "invalid_credentials"
+
+def test_marketplace_initialization_creates_query_indexes(tmp_path, monkeypatch):
+    client = _client(tmp_path, monkeypatch)
+    assert client.get("/marketplace/products").status_code == 200
+    db_path = tmp_path / "marketplace-test.sqlite3"
+    con = sqlite3.connect(db_path)
+    indexes = {row[0] for row in con.execute("SELECT name FROM sqlite_master WHERE type='index'")}
+    con.close()
+    assert "idx_marketplace_products_status_category" in indexes
+    assert "idx_marketplace_requests_status_category" in indexes
+    assert "idx_marketplace_sessions_user_expiry" in indexes
