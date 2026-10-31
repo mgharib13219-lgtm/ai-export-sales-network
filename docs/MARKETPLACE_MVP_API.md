@@ -28,3 +28,8 @@ email verification, password reset, rate limiting, MFA, document upload/storage,
 human verification review UI, transaction escrow, sanctions screening, dispute
 handling, or verified-transaction review adjudication. Do not treat account
 registration or a pending verification request as proof of company identity.
+
+
+## Buyer-to-supplier discovery matching
+
+`GET /marketplace/matches/requests/{request_id}` (producer session required) ranks published listings for an open buyer request. The deterministic score uses exact category agreement and Jaccard overlap of normalized title/specification terms against listing name/description. Results include reasons, information gaps, and mandatory holds. This is discovery assistance only: supplier identity, product claims/certificates, and destination compliance are never auto-cleared. No supplier is contacted and no offer or commitment is created.
