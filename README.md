@@ -40,3 +40,36 @@ The public `/market` page supports producer/buyer registration, login, product d
 The specialist runtime is an admin-only, bounded research workflow. It has no model tool execution or automatic external side effects. Provider outputs are schema-checked and require human review. Approval records do not execute actions. Set a separate `AGENT_APPROVER_TOKEN` in the deployment environment if approval-ledger decisions are needed; do not reuse `ADMIN_TOKEN`.
 
 Marketplace authentication and verification remain MVP-grade: email verification, MFA, password recovery, shared-secret approver identity, independent document review, verified-transaction adjudication, sanctions-screening integrations, and full abuse/rate-limit controls remain launch blockers. Do not treat registration, listing, or match scores as trust certification.
+
+
+## Release readiness and final-test gate
+
+The admin-only `GET /system/readiness` endpoint returns a secret-free checklist
+for required deployment configuration. It distinguishes missing configuration
+from actual provider verification: a configured key is not proof that a provider
+accepts it, and readiness does not prove the deployed service, DNS/TLS, email
+delivery, or scheduled jobs are healthy.
+
+Before the final end-to-end test:
+
+1. Set unique `ADMIN_TOKEN`, `AGENT_APPROVER_TOKEN`, and `AGENT_CRON_TOKEN`
+   secrets in the hosting environment. The approver token must not reuse the
+   admin token. Set the identical cron token in the scheduler's secret store.
+2. Configure a supported AI provider and search provider only if those live
+   capabilities are required for the test. Configure SMTP only for a controlled
+   mailbox test.
+3. Confirm the production database is PostgreSQL and take a restorable backup.
+4. Deploy, then check `/health`, `/ready`, `/system/readiness`, and
+   `/system/integrations` using an authorized admin session.
+5. Run CI and the documented API/UI smoke tests against the deployed release.
+   Verify registration, login, role boundaries, session revocation, listing and
+   RFQ flows, verification review, agent task creation, compliance hold behavior,
+   and approval-ledger immutability.
+6. Use synthetic test companies and a controlled mailbox. Do not contact real
+   buyers/suppliers, issue firm quotes, sign contracts, or move funds during
+   acceptance testing.
+
+A release is not considered production-ready until the deployment checks and
+end-to-end tests have passed. Missing secrets, external-provider validation,
+legal/compliance screening, email verification/MFA/password recovery, evidence
+upload and independent review, and abuse controls remain explicit launch gates.
