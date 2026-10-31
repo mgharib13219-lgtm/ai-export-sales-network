@@ -15,6 +15,7 @@ from agents.rfq import RFQAgent
 from agents.quote import QuoteAgent
 from agents.negotiation import NegotiationAgent
 from app.rate_limit import pipeline_limiter
+from app.marketplace import router as marketplace_router
 from agents.repeat_deal import RepeatDealEngine
 
 @asynccontextmanager
@@ -22,6 +23,7 @@ async def lifespan(app: FastAPI):
     init_db(); yield
 
 app = FastAPI(title=settings.app_name, version=settings.app_version, lifespan=lifespan)
+app.include_router(marketplace_router)
 
 class Product(BaseModel):
     name: str = Field(min_length=2)
