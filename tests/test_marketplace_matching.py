@@ -34,3 +34,14 @@ def test_empty_or_unrelated_text_does_not_create_a_false_positive_score():
     )
     assert result["score"] == 0
     assert result["reasons"] == []
+
+def test_match_results_are_bounded_and_do_not_invent_capacity():
+    request = {"category": "food", "title": "Rice", "specification": "long grain rice"}
+    listings = [
+        {"id": i, "category": "food", "name": "Rice", "description": "long grain rice"}
+        for i in range(120)
+    ]
+    ranked = rank_listings_for_request(request, listings, limit=1000)
+    assert len(ranked) == 100
+    assert all("capacity" in " ".join(item["information_gaps"]) for item in ranked)
+    assert all(item["automatically_cleared"] is False for item in ranked)
