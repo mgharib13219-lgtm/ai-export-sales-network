@@ -74,3 +74,10 @@ def test_approval_payload_limits_share_task_input_guards():
     from app.agent_runtime import _payload_exceeds_limits
     assert not _payload_exceeds_limits({"action": "review_only"})
     assert _payload_exceeds_limits({"document": "x" * 10001})
+
+def test_compliance_must_precede_sensitive_agent_roles():
+    from app.agent_runtime import _compliance_precedes_sensitive_roles
+    assert _compliance_precedes_sensitive_roles(["market_intelligence", "compliance", "buyer_discovery"])
+    assert not _compliance_precedes_sensitive_roles(["buyer_discovery", "compliance"])
+    assert not _compliance_precedes_sensitive_roles(["commercial_advisor"])
+    assert _compliance_precedes_sensitive_roles(["market_intelligence", "quality_auditor"])
