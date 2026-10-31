@@ -186,3 +186,25 @@ def test_verification_type_must_be_explicitly_scoped(tmp_path, monkeypatch):
         "verification_type": "fully_verified_company", "notes": "Please verify everything"
     })
     assert response.status_code == 422
+
+def test_registration_rejects_malformed_email_and_blank_company_fields(tmp_path, monkeypatch):
+    client = _client(tmp_path, monkeypatch)
+    bad_email = client.post("/marketplace/register", json={
+        "email": "invalid-address", "company_name": "Valid Ltd", "country": "Germany",
+        "role": "buyer", "password": "a-long-test-password"
+    })
+    assert bad_email.status_code == 422
+    blank_company = client.post("/marketplace/register", json={
+        "email": "valid@example.com", "company_name": "   ", "country": "Germany",
+        "role": "buyer", "password": "a-long-test-password"
+    })
+    assert blank_company.status_code == 422
+
+def test_product_listing_rejects_whitespace_only_required_fields(tmp_path, monkeypatch):
+    client = _client(tmp_path, monkeypatch)
+    headers = _register_and_login(client, "producer", "blank-product@example.com")
+    response = client.post("/marketplace/products", headers=headers, json={
+        "name": "  ", "category": "food", "description": "a sufficiently long description",
+        "origin": "Türkiye"
+    })
+    assert response.status_code == 422
