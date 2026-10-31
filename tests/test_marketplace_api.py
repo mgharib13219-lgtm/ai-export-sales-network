@@ -98,3 +98,16 @@ def test_closed_requests_are_not_shown_to_producers(tmp_path, monkeypatch):
     feed = client.get("/marketplace/requests", headers=seller_headers)
     assert feed.status_code == 200
     assert all(item["id"] != request_id for item in feed.json())
+
+def test_login_throttles_repeated_invalid_passwords(tmp_path, monkeypatch):
+    client = _client(tmp_path, monkeypatch)
+    _register_and_login(client, "buyer", "throttle@example.com")
+    for _ in range(5):
+        response = client.post("/marketplace/login", json={
+            "email": "throttle@example.com", "password": "incorrect-password"
+        })
+        assert response.status_code == 401
+    locked = client.post("/marketplace/login", json={
+        "email": "throttle@example.com", "password": "a-long-test-password"
+    })
+    assert locked.status_code == 429
