@@ -145,3 +145,8 @@ def test_marketplace_initialization_creates_query_indexes(tmp_path, monkeypatch)
     assert "idx_marketplace_products_status_category" in indexes
     assert "idx_marketplace_requests_status_category" in indexes
     assert "idx_marketplace_sessions_user_expiry" in indexes
+
+def test_marketplace_search_rejects_unbounded_query_and_page_size(tmp_path, monkeypatch):
+    client = _client(tmp_path, monkeypatch)
+    assert client.get("/marketplace/products?q=" + "x" * 121).status_code == 422
+    assert client.get("/marketplace/products?limit=100000").status_code == 422
