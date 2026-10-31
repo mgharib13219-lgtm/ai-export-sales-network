@@ -14,6 +14,7 @@ contract, purchase, or move money.
 - `GET /agent-work/roles` — list specialist roles and allow/deny boundaries.
 - `POST /agent-work/tasks` — enqueue a task with a JSON payload and 1–8 unique roles.
 - `POST /agent-work/tasks/{id}/run` — run the queued task once.
+- `POST /agent-work/tasks/{id}/cancel` — cancel a task only while it remains queued.
 - `GET /agent-work/tasks/{id}` — inspect task, steps and approval ledger.
 - `POST /agent-work/tasks/{id}/approval-requests` — record an approval request; does not execute it.
 - `POST /agent-work/approvals/{id}/decision` — record a decision.
@@ -33,7 +34,7 @@ expiry, scope, target, and one-time use server-side before acting.
 ## Execution behavior
 
 - Roles are allowlisted from `app/agent_roles.py`; unknown or duplicate roles are rejected.
-- A task can be claimed only once from `queued` to `running`.
+- A task can be claimed only once from `queued` to `running`; queued tasks may be cancelled before execution.
 - Each step stores input hash, prompt hash, provider status and output.
 - Provider failures become `INSUFFICIENT_EVIDENCE`; they are not silently treated as success.
 - Model disagreements remain visible in separate outputs.
