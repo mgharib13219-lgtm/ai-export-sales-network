@@ -111,3 +111,18 @@ def test_login_throttles_repeated_invalid_passwords(tmp_path, monkeypatch):
         "email": "throttle@example.com", "password": "a-long-test-password"
     })
     assert locked.status_code == 429
+
+def test_password_change_revokes_all_active_sessions(tmp_path, monkeypatch):
+    client = _client(tmp_path, monkeypatch)
+    headers = _register_and_login(client, "buyer", "password-change@example.com")
+    response = client.post("/marketplace/password", headers=headers, json={
+        "current_password": "a-long-test-password",
+        "new_password": "a-different-long-password"
+    })
+    assert response.status_code == 200
+    assert response.json()["sessions_revoked"] is True
+    assert client.get("/marketplace/me", headers=headers).status_code == 401
+    relogin = client.post("/marketplace/login", json={
+        "email": "password-change@example.com", "password": "a-different-long-password"
+    })
+    assert relogin.status_code == 200
