@@ -73,3 +73,5 @@ A release is not considered production-ready until the deployment checks and
 end-to-end tests have passed. Missing secrets, external-provider validation,
 legal/compliance screening, email verification/MFA/password recovery, evidence
 upload and independent review, and abuse controls remain explicit launch gates.
+
+See [`docs/FINAL_ACCEPTANCE_TEST.md`](docs/FINAL_ACCEPTANCE_TEST.md) for the controlled end-to-end release test plan.
