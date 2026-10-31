@@ -32,6 +32,7 @@ button.secondary{background:#eef2f6;color:#182230;border:1px solid #d7dde5}
 <input id="country" placeholder="کشور">
 <select id="role"><option value="producer">تولیدکننده / تأمین‌کننده</option><option value="buyer">خریدار</option></select>
 </div><div class="grid"><button id="register">ایجاد حساب</button><button id="login" class="secondary">ورود</button></div><p id="authmsg" class="status" aria-live="polite"></p></section>
+<section id="account-settings" hidden><h2>امنیت حساب</h2><div class="grid"><input id="currentpass" type="password" placeholder="گذرواژه فعلی"><input id="newpass" type="password" placeholder="گذرواژه جدید (حداقل ۱۲ نویسه)"></div><button id="changepass">تغییر گذرواژه و خروج از همه دستگاه‌ها</button><p id="passwordmsg" class="status"></p></section>
 <section><h2>جست‌وجوی محصولات</h2><div class="grid"><input id="search" placeholder="نام یا مشخصات محصول"><input id="category" placeholder="دسته‌بندی"><button id="searchbtn">جست‌وجو</button></div><div id="products" aria-live="polite"></div></section>
 <section id="producer" hidden><h2>ثبت محصول</h2><div class="grid">
 <input id="pname" placeholder="نام محصول"><input id="pcategory" placeholder="دسته‌بندی">
@@ -79,7 +80,11 @@ async function login(){
 function renderAccount(){
  $('account').textContent=user?user.company_name+' · '+user.role+' · '+user.country:'برای شروع وارد شوید یا حساب بسازید.';
  $('logout').hidden=!user;$('auth').hidden=!!user;
- $('producer').hidden=!user||user.role!=='producer';$('buyer').hidden=!user||user.role!=='buyer';
+ $('producer').hidden=!user||user.role!=='producer';$('buyer').hidden=!user||user.role!=='buyer';$('account-settings').hidden=!user;
+}
+async function changePassword(){
+ try{const data=await api('/marketplace/password',{method:'POST',body:JSON.stringify({current_password:$('currentpass').value,new_password:$('newpass').value})});showMessage('passwordmsg',data);sessionStorage.removeItem('market_token');user=null;renderAccount();}
+ catch(e){showMessage('passwordmsg',e.message);}
 }
 async function publish(){
  try{const data=await api('/marketplace/products',{method:'POST',body:JSON.stringify({name:$('pname').value,category:$('pcategory').value,description:$('pdesc').value,origin:$('porigin').value,capacity:$('pcapacity').value||null,moq:$('pmoq').value||null,target_markets:$('pmarkets').value||null})});showMessage('productmsg',data);await loadProducts();}
@@ -96,7 +101,7 @@ async function loadRequests(){
  if(!data.length)box.append(node('p','muted','درخواست خرید بازی وجود ندارد.'));
  }catch(e){showMessage('requests',e.message);}
 }
-$('register').addEventListener('click',register);$('login').addEventListener('click',login);
+$('register').addEventListener('click',register);$('login').addEventListener('click',login);$('changepass').addEventListener('click',changePassword);
 $('publish').addEventListener('click',publish);$('submitrequest').addEventListener('click',submitRequest);
 $('searchbtn').addEventListener('click',()=>loadProducts().catch(e=>showMessage('products',e.message)));
 $('loadrequests').addEventListener('click',loadRequests);
