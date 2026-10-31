@@ -10,7 +10,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.db import _con, _execute, _is_postgres, add_audit_event
@@ -29,6 +29,9 @@ def init_marketplace():
         """CREATE TABLE IF NOT EXISTS marketplace_sessions (
             token_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL,
             expires_at TIMESTAMP NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""",
+        """CREATE TABLE IF NOT EXISTS marketplace_login_attempts (
+            attempt_key TEXT PRIMARY KEY, failures INTEGER NOT NULL DEFAULT 0,
+            window_started_at TIMESTAMP NOT NULL, locked_until TIMESTAMP)""",
         """CREATE TABLE IF NOT EXISTS marketplace_products (
             id INTEGER PRIMARY KEY, owner_id INTEGER NOT NULL, name TEXT NOT NULL,
             category TEXT NOT NULL, description TEXT NOT NULL, origin TEXT NOT NULL,
@@ -169,23 +172,57 @@ def register(data: Register):
             "next_step": "Login to publish listings or submit buyer requests. Company verification is separate."}
 
 
-@router.post("/login")
-def login(data: Login):
-    con = _con()
-    row = _execute(con, "SELECT * FROM marketplace_users WHERE email=?", (data.email.strip().lower(),)).fetchone()
-    if not row or not _verify_password(data.password, row["password_hash"]):
-        con.close()
-        raise HTTPException(401, "invalid_credentials")
-    token = secrets.token_urlsafe(40)
-    expires = datetime.now(timezone.utc) + timedelta(days=7)
-    _execute(con, "INSERT INTO marketplace_sessions(token_hash,user_id,expires_at) VALUES(?,?,?)",
-             (hashlib.sha256(token.encode()).hexdigest(), row["id"], expires.isoformat()))
-    con.commit()
-    user = {"id": row["id"], "email": row["email"], "company_name": row["company_name"],
-            "country": row["country"], "role": row["role"]}
-    con.close()
-    return {"access_token": token, "token_type": "bearer", "expires_at": expires.isoformat(), "user": user}
+def _login_attempt_key(email: str, client_host: str) -> str:
+    raw = (email.strip().lower() + "|" + client_host).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
 
+def _check_login_lock(con, attempt_key: str, now: datetime):
+    row = _execute(con, "SELECT failures,window_started_at,locked_until FROM marketplace_login_attempts WHERE attempt_key=?", (attempt_key,)).fetchone()
+    if not row:
+        return
+    locked_until = row["locked_until"]
+    if locked_until and str(locked_until) > now.isoformat():
+        raise HTTPException(429, "login_temporarily_locked")
+    started = datetime.fromisoformat(str(row["window_started_at"]).replace("Z", "+00:00"))
+    if (now - started).total_seconds() > 900:
+        _execute(con, "DELETE FROM marketplace_login_attempts WHERE attempt_key=?", (attempt_key,))
+
+def _record_login_failure(con, attempt_key: str, now: datetime):
+    row = _execute(con, "SELECT failures,window_started_at FROM marketplace_login_attempts WHERE attempt_key=?", (attempt_key,)).fetchone()
+    if not row:
+        _execute(con, "INSERT INTO marketplace_login_attempts(attempt_key,failures,window_started_at,locked_until) VALUES(?,?,?,?)", (attempt_key, 1, now.isoformat(), None))
+        return
+    started = datetime.fromisoformat(str(row["window_started_at"]).replace("Z", "+00:00"))
+    if (now - started).total_seconds() > 900:
+        _execute(con, "UPDATE marketplace_login_attempts SET failures=1,window_started_at=?,locked_until=NULL WHERE attempt_key=?", (now.isoformat(), attempt_key))
+        return
+    failures = int(row["failures"]) + 1
+    locked = (now + timedelta(minutes=15)).isoformat() if failures >= 5 else None
+    _execute(con, "UPDATE marketplace_login_attempts SET failures=?,locked_until=? WHERE attempt_key=?", (failures, locked, attempt_key))
+
+@router.post("/login")
+def login(data: Login, request: Request):
+    email = data.email.strip().lower()
+    now = datetime.now(timezone.utc)
+    client_host = request.client.host if request.client else "unknown"
+    attempt_key = _login_attempt_key(email, client_host)
+    con = _con()
+    try:
+        _check_login_lock(con, attempt_key, now)
+        row = _execute(con, "SELECT * FROM marketplace_users WHERE email=?", (email,)).fetchone()
+        if not row or not _verify_password(data.password, row["password_hash"]):
+            _record_login_failure(con, attempt_key, now)
+            con.commit()
+            raise HTTPException(401, "invalid_credentials")
+        _execute(con, "DELETE FROM marketplace_login_attempts WHERE attempt_key=?", (attempt_key,))
+        token = secrets.token_urlsafe(40)
+        expires = now + timedelta(days=7)
+        _execute(con, "INSERT INTO marketplace_sessions(token_hash,user_id,expires_at) VALUES(?,?,?)", (hashlib.sha256(token.encode()).hexdigest(), row["id"], expires.isoformat()))
+        con.commit()
+        user = {"id": row["id"], "email": row["email"], "company_name": row["company_name"], "country": row["country"], "role": row["role"]}
+    finally:
+        con.close()
+    return {"access_token": token, "token_type": "bearer", "expires_at": expires.isoformat(), "user": user}
 
 @router.get("/me")
 def me(user=Depends(_current_user)):
