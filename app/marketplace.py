@@ -83,6 +83,9 @@ def _verify_password(password: str, stored: str):
         return False
 
 
+DUMMY_PASSWORD_HASH = _hash_password("constant-dummy-password-not-for-login")
+
+
 class Register(BaseModel):
     email: str = Field(min_length=5, max_length=254)
     company_name: str = Field(min_length=2, max_length=180)
@@ -219,7 +222,9 @@ def login(data: Login, request: Request):
         for attempt_key in attempt_keys:
             _check_login_lock(con, attempt_key, now)
         row = _execute(con, "SELECT * FROM marketplace_users WHERE email=?", (email,)).fetchone()
-        if not row or not _verify_password(data.password, row["password_hash"]):
+        stored_hash = row["password_hash"] if row else DUMMY_PASSWORD_HASH
+        password_valid = _verify_password(data.password, stored_hash)
+        if not row or not password_valid:
             for attempt_key in attempt_keys:
                 _record_login_failure(con, attempt_key, now)
             con.commit()
