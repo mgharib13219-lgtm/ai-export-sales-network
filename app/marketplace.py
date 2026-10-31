@@ -10,7 +10,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from app.db import _con, _execute, _is_postgres, add_audit_event
@@ -334,7 +334,9 @@ def archive_product(product_id: int, user=Depends(_current_user)):
 
 
 @router.get("/products")
-def list_products(q: Optional[str] = None, category: Optional[str] = None, limit: int = 50):
+def list_products(q: Optional[str] = Query(default=None, max_length=120),
+                  category: Optional[str] = Query(default=None, max_length=120),
+                  limit: int = Query(default=50, ge=1, le=100)):
     limit = max(1, min(limit, 100))
     clauses = ["p.status='published'"]
     values = []
@@ -400,7 +402,8 @@ def close_buy_request(request_id: int, user=Depends(_current_user)):
 
 
 @router.get("/requests")
-def list_requests(category: Optional[str] = None, limit: int = 50, user=Depends(_current_user)):
+def list_requests(category: Optional[str] = Query(default=None, max_length=120),
+                  limit: int = Query(default=50, ge=1, le=100), user=Depends(_current_user)):
     _require_role(user, "producer")
     clauses, values = ["status='open'"], []
     if category:
