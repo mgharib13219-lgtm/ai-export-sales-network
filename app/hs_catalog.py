@@ -22,7 +22,7 @@ FA_KEYS = ("description_fa", "name_fa", "description", "نام", "شرح", "شر
 EN_KEYS = ("description_en", "name_en", "english_description", "نام انگلیسی", "شرح انگلیسی")
 PARENT_KEYS = ("parent_code", "parent")
 DIGITS_KEYS = ("digits", "length", "رقم")
-SOURCE_KEYS = ("source", "منبع")
+SOURCE_KEYS = ("source", "source_id", "منبع")
 
 
 def init_hs_catalog():
@@ -91,8 +91,6 @@ async def import_hs_csv(request: Request,
                 continue
             if not re.fullmatch(r"\d{2}(?:\d{2}){0,3}", code):
                 raise ValueError(f"invalid_hs_code_at_line_{line_no}")
-            if not fa:
-                raise ValueError(f"missing_persian_description_at_line_{line_no}")
             if parent and not re.fullmatch(r"\d{2}(?:\d{2}){0,3}", parent):
                 raise ValueError(f"invalid_parent_code_at_line_{line_no}")
             if code in seen:
