@@ -82,17 +82,22 @@ async def import_hs_csv(request: Request,
         prepared = []
         seen = set()
         for line_no, row in enumerate(reader, start=2):
-            code = re.sub(r"\s+", "", _pick(row, CODE_KEYS))
+            raw_code = re.sub(r"\s+", "", _pick(row, CODE_KEYS))
+            digits = _pick(row, DIGITS_KEYS)
+            code = _normalize_code(raw_code, digits or None)
             fa = _pick(row, FA_KEYS)
             en = _pick(row, EN_KEYS)
-            parent = _pick(row, PARENT_KEYS)
+            raw_parent = _pick(row, PARENT_KEYS)
             row_source = _pick(row, SOURCE_KEYS) or source
-            if not code and not fa:
+            if not raw_code and not fa:
                 continue
-            if not re.fullmatch(r"\d{2}(?:\d{2}){0,3}", code):
+            if not code:
                 raise ValueError(f"invalid_hs_code_at_line_{line_no}")
-            if parent and not re.fullmatch(r"\d{2}(?:\d{2}){0,3}", parent):
-                raise ValueError(f"invalid_parent_code_at_line_{line_no}")
+            parent = ""
+            if raw_parent:
+                parent = _normalize_code(raw_parent, len(code) - 2 if len(code) > 2 else None)
+                if not parent or len(code) <= 2:
+                    raise ValueError(f"invalid_parent_code_at_line_{line_no}")
             if code in seen:
                 raise ValueError(f"duplicate_hs_code_at_line_{line_no}")
             seen.add(code)
