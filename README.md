@@ -75,3 +75,8 @@ legal/compliance screening, email verification/MFA/password recovery, evidence
 upload and independent review, and abuse controls remain explicit launch gates.
 
 See [`docs/FINAL_ACCEPTANCE_TEST.md`](docs/FINAL_ACCEPTANCE_TEST.md) for the controlled end-to-end release test plan.
+
+
+## ERP and commerce integrations
+
+The platform uses a vendor-neutral connector architecture so customers can optionally connect an existing ERP or B2B shop without replacing the marketplace, buyer discovery, trade intelligence or CRM. CosmoShop and Forterro are candidate ecosystems only; no vendor integration, account, subscription or credential is active. Integrations are disabled by default and must begin with a tenant-isolated, read-only sandbox pilot. See [`docs/ERP_COMMERCE_CONNECTOR_ARCHITECTURE.md`](docs/ERP_COMMERCE_CONNECTOR_ARCHITECTURE.md) for data ownership, connector requirements, rollout gates and security controls.
