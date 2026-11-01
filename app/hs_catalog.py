@@ -21,6 +21,7 @@ CODE_KEYS = ("hs_code", "code", "tariff_code", "کد", "کدتعرفه", "کد �
 FA_KEYS = ("description_fa", "name_fa", "description", "نام", "شرح", "شرح تعرفه", "شرح کالا")
 EN_KEYS = ("description_en", "name_en", "english_description", "نام انگلیسی", "شرح انگلیسی")
 PARENT_KEYS = ("parent_code", "parent")
+DIGITS_KEYS = ("digits", "length", "رقم")
 SOURCE_KEYS = ("source", "منبع")
 
 
@@ -50,6 +51,18 @@ def _pick(row, keys):
         if value:
             return value
     return ""
+
+
+def _normalize_code(value, digits=None):
+    raw = str(value or "").strip().replace(",", "").replace(" ", "")
+    if raw.endswith(".0"):
+        raw = raw[:-2]
+    if not raw.isdigit():
+        return ""
+    width = int(digits) if str(digits or "").isdigit() else len(raw)
+    if width not in (2, 4, 6, 8):
+        return ""
+    return raw.zfill(width)
 
 
 @router.post("/import-csv", dependencies=[Depends(require_admin)])
