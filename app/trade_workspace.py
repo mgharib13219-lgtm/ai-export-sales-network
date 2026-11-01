@@ -9,6 +9,18 @@ from app.marketplace import _current_user, _require_role
 router = APIRouter(prefix="/trade", tags=["native-trade-workspace"])
 
 
+# Starter catalogue templates for the raisins pilot. These are product definitions,
+# not claims of available stock, certification, origin, or current seller pricing.
+STARTER_CATALOG = [
+    {"sku_template": "RAISIN-GOLDEN", "name": "Golden raisins", "name_fa": "کشمش طلایی", "hs_code": "080620", "category": "dried_grapes", "unit": "kg"},
+    {"sku_template": "RAISIN-GREEN", "name": "Green raisins", "name_fa": "کشمش سبز", "hs_code": "080620", "category": "dried_grapes", "unit": "kg"},
+    {"sku_template": "RAISIN-SULTANA", "name": "Sultana raisins", "name_fa": "کشمش سلطانی", "hs_code": "080620", "category": "dried_grapes", "unit": "kg"},
+    {"sku_template": "RAISIN-SUNDRIED", "name": "Sun-dried raisins", "name_fa": "کشمش آفتابی", "hs_code": "080620", "category": "dried_grapes", "unit": "kg"},
+    {"sku_template": "RAISIN-BLACK", "name": "Black raisins", "name_fa": "کشمش سیاه", "hs_code": "080620", "category": "dried_grapes", "unit": "kg"},
+    {"sku_template": "RAISIN-ORGANIC", "name": "Organic raisins (certification required)", "name_fa": "کشمش ارگانیک (نیازمند گواهی معتبر)", "hs_code": "080620", "category": "dried_grapes", "unit": "kg"}
+]
+
+
 def init_trade_workspace():
     con = _con()
     statements = [
@@ -73,6 +85,12 @@ class PriceItemCreate(BaseModel):
     minimum_quantity: float = Field(default=1, gt=0)
     incoterm: Optional[str] = Field(default=None, max_length=12)
     destination_country: Optional[str] = Field(default=None, max_length=100)
+
+
+@router.get("/catalog/templates")
+def list_catalog_templates(user=Depends(_current_user)):
+    """Return starter product definitions; no stock or seller claims are implied."""
+    return STARTER_CATALOG
 
 
 @router.post("/inventory")
