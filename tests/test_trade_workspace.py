@@ -108,3 +108,14 @@ def test_price_list_date_range_must_be_ordered(tmp_path, monkeypatch):
         "valid_from": "2026-12-01", "valid_until": "2026-11-01"
     })
     assert response.status_code == 422
+
+
+def test_starter_catalog_is_reference_only_and_has_no_stock_or_price(tmp_path, monkeypatch):
+    client = _client(tmp_path, monkeypatch)
+    seller = _account(client, "catalog@example.com")
+    response = client.get("/trade/catalog/templates", headers=seller)
+    assert response.status_code == 200
+    items = response.json()
+    assert len(items) == 6
+    assert all(item["hs_code"] == "080620" for item in items)
+    assert all("quantity" not in item and "unit_price" not in item for item in items)
