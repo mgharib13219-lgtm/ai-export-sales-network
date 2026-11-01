@@ -136,24 +136,35 @@ async def import_hs_csv(request: Request,
 
 @router.get("")
 def search_hs_catalog(q: str = Query(default="", max_length=160),
-                      level: int | None = Query(default=None, ge=2, le=8),
+                      level: int | None = Query(default=None),
                       limit: int = Query(default=50, ge=1, le=100),
                       offset: int = Query(default=0, ge=0, le=100000)):
     """Search imported Iranian HS rows by code or Persian/English description."""
+    if level is not None and level not in (2, 4, 6, 8):
+        raise HTTPException(422, "invalid_hs_level")
     con = _con()
     sql = """SELECT hs_code,description_fa,description_en,parent_code,source,
              source_version,imported_at FROM iran_hs_catalog WHERE is_active=1"""
+    count_sql = "SELECT COUNT(*) AS n FROM iran_hs_catalog WHERE is_active=1"
     params = []
+    count_params = []
     if q.strip():
         term = q.strip()[:160]
         sql += " AND (hs_code LIKE ? OR description_fa LIKE ? OR description_en LIKE ?)"
-        params.extend((f"%{term}%", f"%{term}%", f"%{term}%"))
+        like_params = (f"%{term}%", f"%{term}%", f"%{term}%")
+        params.extend(like_params)
+        count_sql += " AND (hs_code LIKE ? OR description_fa LIKE ? OR description_en LIKE ?)"
+        count_params.extend(like_params)
     if level is not None:
         sql += " AND LENGTH(hs_code)=?"
         params.append(level)
-    rows = _execute(con, sql + " ORDER BY hs_code LIMIT ? OFFSET ?",
-                    tuple(params) + (limit, offset)).fetchall()
-    count = _execute(con, "SELECT COUNT(*) AS n FROM iran_hs_catalog WHERE is_active=1").fetchone()["n"]
-    con.close()
+        count_sql += " AND LENGTH(hs_code)=?"
+        count_params.append(level)
+    try:
+        rows = _execute(con, sql + " ORDER BY hs_code LIMIT ? OFFSET ?",
+                        tuple(params) + (limit, offset)).fetchall()
+        count = _execute(con, count_sql, tuple(count_params)).fetchone()["n"]
+    finally:
+        con.close()
     return {"items": [dict(row) for row in rows], "active_catalog_rows": count,
             "limit": limit, "offset": offset}
