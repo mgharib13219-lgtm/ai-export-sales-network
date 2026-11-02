@@ -33,6 +33,10 @@ button.secondary{background:#eef2f6;color:#182230;border:1px solid #d7dde5}
 <select id="role"><option value="producer">تولیدکننده / تأمین‌کننده</option><option value="buyer">خریدار</option></select>
 </div><div class="grid"><button id="register">ایجاد حساب</button><button id="login" class="secondary">ورود</button></div><p id="authmsg" class="status" aria-live="polite"></p></section>
 <section id="account-settings" hidden><h2>امنیت حساب</h2><div class="grid"><input id="currentpass" type="password" placeholder="گذرواژه فعلی"><input id="newpass" type="password" placeholder="گذرواژه جدید (حداقل ۱۲ نویسه)"></div><button id="changepass">تغییر گذرواژه و خروج از همه دستگاه‌ها</button><p id="passwordmsg" class="status"></p></section>
+<section><h2>فهرست جامع تعرفه‌های گمرکی ایران (HS)</h2>
+<p class="muted">جست‌وجو بر اساس کد تعرفه یا شرح فارسی/انگلیسی؛ نمایش فقط ردیف‌هایی که از منبع رسمی/مستند وارد شده‌اند.</p>
+<div class="grid"><input id="hscodeq" placeholder="کد تعرفه یا نام کالا"><select id="hslevel"><option value="">همه سطوح</option><option value="2">۲ رقمی</option><option value="4">۴ رقمی</option><option value="6">۶ رقمی</option><option value="8">۸ رقمی</option></select><button id="hscodebtn">جست‌وجوی تعرفه</button></div>
+<p id="hscount" class="muted" aria-live="polite">برای مشاهده، جست‌وجو کنید.</p><div id="hscatalog" aria-live="polite"></div></section>
 <section><h2>جست‌وجوی محصولات</h2><div class="grid"><input id="search" placeholder="نام یا مشخصات محصول"><input id="category" placeholder="دسته‌بندی"><button id="searchbtn">جست‌وجو</button></div><div id="products" aria-live="polite"></div></section>
 <section id="producer" hidden><h2>ثبت محصول</h2><div class="grid">
 <input id="pname" placeholder="نام محصول"><input id="pcategory" placeholder="دسته‌بندی">
@@ -61,6 +65,22 @@ async function api(path,options={}) {
 }
 function node(tag,cls,text){const e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=String(text);return e;}
 function showMessage(id,value){$(id).textContent=typeof value==='string'?value:JSON.stringify(value,null,2);}
+async function loadHsCatalog(){
+ const params=new URLSearchParams();if($('hscodeq').value.trim())params.set('q',$('hscodeq').value.trim());
+ if($('hslevel').value)params.set('level',$('hslevel').value);
+ params.set('limit','50');
+ const data=await api('/trade/hs-catalog?'+params.toString());
+ const box=$('hscatalog');box.replaceChildren();
+ $('hscount').textContent='کل ردیف‌های فعال واردشده: '+data.active_catalog_rows+' · نمایش: '+data.items.length;
+ if(!data.items.length){box.append(node('p','muted','ردیفی یافت نشد؛ ممکن است فایل تعرفه هنوز وارد نشده باشد.'));return;}
+ const table=node('div','card');
+ data.items.forEach(item=>{
+  const row=node('div','card');
+  row.append(node('strong','',item.hs_code),node('p','',item.description_fa||'شرح فارسی ثبت نشده'),node('p','muted',(item.description_en||'')+' · والد: '+(item.parent_code||'—')+' · منبع: '+item.source+' · نسخه: '+(item.source_version||'—')));
+  table.append(row);
+ });
+ box.append(table);
+}
 async function loadProducts(){
  const params=new URLSearchParams();if($('search').value)params.set('q',$('search').value);
  if($('category').value)params.set('category',$('category').value);
@@ -104,6 +124,8 @@ async function loadRequests(){
 $('register').addEventListener('click',register);$('login').addEventListener('click',login);$('changepass').addEventListener('click',changePassword);
 $('publish').addEventListener('click',publish);$('submitrequest').addEventListener('click',submitRequest);
 $('searchbtn').addEventListener('click',()=>loadProducts().catch(e=>showMessage('products',e.message)));
+$('hscodebtn').addEventListener('click',()=>loadHsCatalog().catch(e=>showMessage('hscatalog',e.message)));
+$('hscodeq').addEventListener('keydown',e=>{if(e.key==='Enter')loadHsCatalog().catch(err=>showMessage('hscatalog',err.message));});
 $('loadrequests').addEventListener('click',loadRequests);
 $('logout').addEventListener('click',async()=>{try{await api('/marketplace/logout',{method:'POST'});}catch{}sessionStorage.removeItem('market_token');user=null;renderAccount();});
 loadProducts().catch(e=>showMessage('products',e.message));
