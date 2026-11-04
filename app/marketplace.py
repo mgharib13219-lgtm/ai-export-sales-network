@@ -14,8 +14,10 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from app.db import _con, _execute, _is_postgres, add_audit_event
+from app.db import _con, _execute, _is_postgres, _column_exists, add_audit_event
 from app.auth import require_admin
+from app.settings import settings
+from app.providers import email_provider
 from app.marketplace_matching import rank_listings_for_request
 
 router = APIRouter(prefix="/marketplace", tags=["marketplace"])
@@ -27,7 +29,14 @@ def init_marketplace():
         """CREATE TABLE IF NOT EXISTS marketplace_users (
             id INTEGER PRIMARY KEY, email TEXT NOT NULL UNIQUE, company_name TEXT NOT NULL,
             country TEXT NOT NULL, role TEXT NOT NULL, password_hash TEXT NOT NULL,
+            email_verified BOOLEAN NOT NULL DEFAULT FALSE,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""",
+        """CREATE TABLE IF NOT EXISTS marketplace_email_verification_tokens (
+            token_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL,
+            expires_at TIMESTAMP NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""",
+        """CREATE TABLE IF NOT EXISTS marketplace_password_reset_tokens (
+            token_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL,
+            expires_at TIMESTAMP NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""",
         """CREATE TABLE IF NOT EXISTS marketplace_sessions (
             token_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL,
             expires_at TIMESTAMP NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""",
@@ -67,6 +76,11 @@ def init_marketplace():
     ])
     for statement in statements:
         _execute(con, statement)
+    # Preserve access for existing accounts when this column is introduced.
+    if not _column_exists(con, "marketplace_users", "email_verified"):
+        _execute(con, "ALTER TABLE marketplace_users ADD COLUMN email_verified BOOLEAN NOT NULL DEFAULT TRUE")
+    _execute(con, "CREATE INDEX IF NOT EXISTS idx_marketplace_email_tokens_user ON marketplace_email_verification_tokens(user_id)")
+    _execute(con, "CREATE INDEX IF NOT EXISTS idx_marketplace_reset_tokens_user ON marketplace_password_reset_tokens(user_id)")
     now = datetime.now(timezone.utc).isoformat()
     _execute(con, "DELETE FROM marketplace_sessions WHERE expires_at<=?", (now,))
     _execute(con, "DELETE FROM marketplace_login_attempts WHERE window_started_at<=? AND (locked_until IS NULL OR locked_until<=?)",
@@ -112,6 +126,19 @@ class Register(BaseModel):
 class Login(BaseModel):
     email: str = Field(min_length=5, max_length=254)
     password: str = Field(min_length=1, max_length=200)
+
+
+class EmailLookup(BaseModel):
+    email: str = Field(min_length=5, max_length=254)
+
+
+class AuthToken(BaseModel):
+    token: str = Field(min_length=32, max_length=200)
+
+
+class PasswordReset(BaseModel):
+    token: str = Field(min_length=32, max_length=200)
+    new_password: str = Field(min_length=12, max_length=200)
 
 
 class PasswordChange(BaseModel):
@@ -189,8 +216,9 @@ def register(data: Register):
     con = _con()
     try:
         user_id = _id_insert(con,
-            "INSERT INTO marketplace_users(email,company_name,country,role,password_hash) VALUES(?,?,?,?,?)",
-            (email, data.company_name.strip(), data.country.strip(), role, _hash_password(data.password)))
+            "INSERT INTO marketplace_users(email,company_name,country,role,password_hash,email_verified) VALUES(?,?,?,?,?,?)",
+            (email, data.company_name.strip(), data.country.strip(), role, _hash_password(data.password),
+             not settings.require_email_verification))
         con.commit()
     except Exception:
         con.rollback()
@@ -198,8 +226,114 @@ def register(data: Register):
     finally:
         con.close()
     add_audit_event("marketplace.account_registered", email, str(user_id), "user", str(user_id), {"role": role})
+    if settings.require_email_verification:
+        sent = _send_marketplace_auth_email(
+            "marketplace_email_verification_tokens", user_id, email,
+            "Verify your AI Export Sales Network email",
+            "Use this one-time token with POST /marketplace/email-verification/confirm."
+        )
+        return {"status": "verification_pending", "user_id": user_id, "role": role,
+                "email_sent": sent,
+                "next_step": "Check your email, then confirm the one-time token before logging in. You can request another email if needed."}
     return {"status": "registered", "user_id": user_id, "role": role,
             "next_step": "Login to publish listings or submit buyer requests. Company verification is separate."}
+
+
+def _hash_auth_token(token: str):
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _send_marketplace_auth_email(table: str, user_id: int, email: str, subject: str, instruction: str):
+    allowed = {"marketplace_email_verification_tokens", "marketplace_password_reset_tokens"}
+    if table not in allowed:
+        raise ValueError("unsupported_auth_token_table")
+    token = secrets.token_urlsafe(40)
+    lifetime = timedelta(hours=24) if table == "marketplace_email_verification_tokens" else timedelta(hours=1)
+    expires = (datetime.now(timezone.utc) + lifetime).isoformat()
+    con = _con()
+    try:
+        _execute(con, f"DELETE FROM {table} WHERE user_id=?", (user_id,))
+        _execute(con, f"INSERT INTO {table}(token_hash,user_id,expires_at) VALUES(?,?,?)",
+                 (_hash_auth_token(token), user_id, expires))
+        con.commit()
+    finally:
+        con.close()
+    base = (getattr(settings, "public_base_url", "") or "").rstrip("/")
+    base_line = f"Application: {base}\n" if base else ""
+    body = (f"{instruction}\n{base_line}One-time token: {token}\n"
+            "Do not share this token. It expires automatically and can be used only once.")
+    result = email_provider.send(email, subject, body)
+    return result.get("status") == "sent"
+
+
+@router.post("/email-verification/confirm")
+def confirm_email(data: AuthToken):
+    now = datetime.now(timezone.utc).isoformat()
+    con = _con()
+    row = _execute(con, """SELECT t.user_id,u.email FROM marketplace_email_verification_tokens t
+        JOIN marketplace_users u ON u.id=t.user_id WHERE t.token_hash=? AND t.expires_at>?""",
+        (_hash_auth_token(data.token), now)).fetchone()
+    if not row:
+        con.close()
+        raise HTTPException(400, "invalid_or_expired_verification_token")
+    _execute(con, "UPDATE marketplace_users SET email_verified=TRUE WHERE id=?", (row["user_id"],))
+    _execute(con, "DELETE FROM marketplace_email_verification_tokens WHERE user_id=?", (row["user_id"],))
+    con.commit()
+    con.close()
+    add_audit_event("marketplace.email_verified", row["email"], str(row["user_id"]),
+                    "user", str(row["user_id"]), {"verified": True})
+    return {"status": "email_verified"}
+
+
+@router.post("/email-verification/resend")
+def resend_email_verification(data: EmailLookup):
+    email = data.email.strip().lower()
+    con = _con()
+    row = _execute(con, "SELECT id,email,email_verified FROM marketplace_users WHERE email=?", (email,)).fetchone()
+    con.close()
+    if row and not bool(row["email_verified"]):
+        _send_marketplace_auth_email(
+            "marketplace_email_verification_tokens", row["id"], row["email"],
+            "Verify your AI Export Sales Network email",
+            "Use this one-time token with POST /marketplace/email-verification/confirm."
+        )
+    return {"status": "accepted", "message": "If the account requires verification, an email will be sent."}
+
+
+@router.post("/password/forgot")
+def request_password_reset(data: EmailLookup):
+    email = data.email.strip().lower()
+    con = _con()
+    row = _execute(con, "SELECT id,email FROM marketplace_users WHERE email=?", (email,)).fetchone()
+    con.close()
+    if row:
+        _send_marketplace_auth_email(
+            "marketplace_password_reset_tokens", row["id"], row["email"],
+            "Reset your AI Export Sales Network password",
+            "Use this one-time token with POST /marketplace/password/reset and provide a new password."
+        )
+    return {"status": "accepted", "message": "If the account exists, password-reset instructions will be sent."}
+
+
+@router.post("/password/reset")
+def reset_password(data: PasswordReset):
+    now = datetime.now(timezone.utc).isoformat()
+    con = _con()
+    row = _execute(con, """SELECT t.user_id,u.email FROM marketplace_password_reset_tokens t
+        JOIN marketplace_users u ON u.id=t.user_id WHERE t.token_hash=? AND t.expires_at>?""",
+        (_hash_auth_token(data.token), now)).fetchone()
+    if not row:
+        con.close()
+        raise HTTPException(400, "invalid_or_expired_reset_token")
+    _execute(con, "UPDATE marketplace_users SET password_hash=? WHERE id=?",
+             (_hash_password(data.new_password), row["user_id"]))
+    _execute(con, "DELETE FROM marketplace_sessions WHERE user_id=?", (row["user_id"],))
+    _execute(con, "DELETE FROM marketplace_password_reset_tokens WHERE user_id=?", (row["user_id"],))
+    con.commit()
+    con.close()
+    add_audit_event("marketplace.password_reset", row["email"], str(row["user_id"]),
+                    "user", str(row["user_id"]), {"sessions_revoked": True})
+    return {"status": "password_reset", "sessions_revoked": True}
 
 
 def _login_attempt_keys(email: str, client_host: str):
@@ -255,6 +389,8 @@ def login(data: Login, request: Request):
                 _record_login_failure(con, attempt_key, now)
             con.commit()
             raise HTTPException(401, "invalid_credentials")
+        if settings.require_email_verification and not bool(row["email_verified"]):
+            raise HTTPException(403, "email_verification_required")
         for attempt_key in attempt_keys:
             _execute(con, "DELETE FROM marketplace_login_attempts WHERE attempt_key=?", (attempt_key,))
         token = secrets.token_urlsafe(40)
