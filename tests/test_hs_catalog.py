@@ -1,4 +1,12 @@
-from app.hs_catalog import _header_token, _normalize_code, _pick
+from fastapi import HTTPException
+
+from app.hs_catalog import (
+    _header_token,
+    _normalize_code,
+    _parse_hs_csv,
+    _pick,
+    search_hs_catalog,
+)
 
 
 def test_numeric_source_codes_keep_hs_leading_zeroes():
@@ -25,23 +33,40 @@ def test_persian_and_arabic_digits_are_normalized_to_ascii():
 
 
 def test_header_aliases_accept_arabic_letter_variants_and_spacing():
-    assert _header_token("كود‌تعرفه") == _header_token("کد تعرفه")
+    assert _header_token("كود\u200cتعرفه") == _header_token("کد تعرفه")
     assert _pick({"كود تعرفه": "0101"}, ("کد تعرفه",)) == "0101"
     assert _pick({"شماره تعرفه": "010121"}, ("tariff_code", "شماره تعرفه")) == "010121"
 
 
-def test_catalog_row_without_description_is_rejected():
-    from fastapi import HTTPException
-    from app.hs_catalog import import_hs_csv
-    # The validation is exercised via the dedicated parser helper by the API
-    # tests in the full suite; this assertion documents the required contract.
-    assert _normalize_code("0101", "4") == "0101"
+def test_parser_accepts_persian_code_and_header_variants():
+    csv_data = "كود تعرفه,شرح کالا,تعداد رقم\n۰۱۰۱,حیوانات زنده,۴\n".encode("utf-8")
+    rows, _ = _parse_hs_csv(csv_data, "IRICA", "2026")
+    assert len(rows) == 1
+    assert rows[0][0] == "0101"
+    assert rows[0][1] == "حیوانات زنده"
+
+
+def test_parser_rejects_rows_without_a_description():
+    csv_data = "hs_code,description_fa,digits\n0101,,4\n".encode("utf-8")
+    try:
+        _parse_hs_csv(csv_data, "IRICA", "2026")
+    except ValueError as exc:
+        assert str(exc) == "missing_hs_description_at_line_2"
+    else:
+        raise AssertionError("description-free tariff row was accepted")
+
+
+def test_parser_rejects_code_longer_than_declared_level():
+    csv_data = "hs_code,description_fa,digits\n12345,شرح,4\n".encode("utf-8")
+    try:
+        _parse_hs_csv(csv_data, "IRICA", "2026")
+    except ValueError as exc:
+        assert str(exc) == "invalid_hs_code_at_line_2"
+    else:
+        raise AssertionError("HS code longer than its level was accepted")
 
 
 def test_hs_level_filter_only_accepts_hierarchy_widths():
-    from fastapi import HTTPException
-    from app.hs_catalog import search_hs_catalog
-
     for level in (3, 5, 7, 9):
         try:
             search_hs_catalog(level=level)
