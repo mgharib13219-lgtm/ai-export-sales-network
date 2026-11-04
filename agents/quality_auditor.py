@@ -23,7 +23,10 @@ class QualityAuditorAgent:
                 issues.append({"code": "deal_builder_performed_external_commitment", "severity": "critical", "item": index})
             if pack.get("approval_required") is not True:
                 issues.append({"code": "deal_pack_missing_human_approval_gate", "severity": "critical", "item": index})
-        for index, evidence in enumerate(result.get("document_evidence") or []):
+        document_evidence = result.get("document_evidence") or []
+        if isinstance(document_evidence, dict):
+            document_evidence = [document_evidence]
+        for index, evidence in enumerate(document_evidence):
             if evidence.get("authenticity_verified") is True or evidence.get("issuer_verified") is True:
                 issues.append({"code": "automated_document_verification_claim", "severity": "critical", "item": index})
         compliance = result.get("compliance_review") or {}
