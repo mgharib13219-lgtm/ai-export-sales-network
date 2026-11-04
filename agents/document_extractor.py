@@ -60,10 +60,10 @@ class DocumentExtractor:
         if len(text) >= MAX_TEXT_CHARS:
             warnings.append("text_truncated_at_safety_limit")
         fields = {
-            "emails": sorted(set(re.findall(r"(?i)\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}\\b", text)))[:100],
-            "hs_code_candidates": sorted(set(re.findall(r"(?<!\\d)\\d{6,10}(?!\\d)", text)))[:100],
-            "date_candidates": sorted(set(re.findall(r"\\b(?:\\d{4}[-/]\\d{1,2}[-/]\\d{1,2}|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4})\\b", text)))[:100],
-            "currency_amount_candidates": sorted(set(re.findall(r"(?i)(?:USD|EUR|GBP|AED|CNY|\\$|€|£)\\s?\\d[\\d,]*(?:\\.\\d{1,4})?", text)))[:100],
+            "emails": sorted(set(re.findall(r"(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", text)))[:100],
+            "hs_code_candidates": sorted(set(re.findall(r"(?<!\d)\d{6,10}(?!\d)", text)))[:100],
+            "date_candidates": sorted(set(re.findall(r"\b(?:\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{2,4})\b", text)))[:100],
+            "currency_amount_candidates": sorted(set(re.findall(r"(?i)(?:USD|EUR|GBP|AED|CNY|\$|€|£)\s?\d[\d,]*(?:\.\d{1,4})?", text)))[:100],
         }
         result = {
             "status": "extracted" if text.strip() else "no_text_extracted",
@@ -89,7 +89,7 @@ class DocumentExtractor:
     def _detect_delimiter(text: str) -> str:
         sample = text[:8192]
         try:
-            return csv.Sniffer().sniff(sample, delimiters=",;\\t").delimiter
+            return csv.Sniffer().sniff(sample, delimiters=",;\t").delimiter
         except csv.Error:
             return ","
 
