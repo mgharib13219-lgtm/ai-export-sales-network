@@ -1,6 +1,6 @@
 """Conservative, idempotent follow-up drafts. No message is sent."""
 from datetime import datetime, timezone, timedelta
-from app.db import add_activity, update_lead, claim_idempotency, complete_idempotency, fail_idempotency
+from app.db import add_activity, update_lead, list_activities, claim_idempotency, complete_idempotency, fail_idempotency
 
 
 class FollowUpAgent:
@@ -17,7 +17,12 @@ class FollowUpAgent:
         update_lead(lead["id"], next_follow_up=dt)
         return dt
 
-    def create_draft(self, lead, attempt=1):
+    def create_draft(self, lead, attempt=None):
+        if attempt is None and lead and lead.get('id'):
+            prior = [x for x in list_activities(lead['id'], limit=500) if x.get('kind') == 'follow_up']
+            attempt = len(prior) + 1
+        if attempt is None:
+            attempt = 1
         if not isinstance(attempt, int) or isinstance(attempt, bool) or not 1 <= attempt <= 20:
             return {"status": "invalid_attempt"}
         if not lead or not lead.get("id"):
