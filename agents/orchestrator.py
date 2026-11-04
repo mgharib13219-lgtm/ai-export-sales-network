@@ -16,7 +16,11 @@ class Orchestrator:
     def run(self, product, run_id):
         # Run the compliance preflight before buyer discovery or matching.
         compliance = ComplianceGatekeeper().run(product)
-        supplier_profile = SupplierOnboardingAgent().run(product, product)
+        supplier_profile = SupplierOnboardingAgent().run({
+            "company_name": product.get("supplier_company_name"),
+            "country": product.get("supplier_country"),
+            "evidence": product.get("supplier_evidence") or {},
+        }, product)
         catalogue = CatalogueEditorAgent().run(product)
 
         if compliance["status"] == "BLOCKED":
