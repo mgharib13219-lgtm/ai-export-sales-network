@@ -18,17 +18,17 @@ class FollowUpAgent:
         return dt
 
     def create_draft(self, lead, attempt=None):
-        if attempt is None and lead and lead.get('id'):
-            prior = [x for x in list_activities(lead['id'], limit=500) if x.get('kind') == 'follow_up']
-            attempt = len(prior) + 1
-        if attempt is None:
-            attempt = 1
-        if not isinstance(attempt, int) or isinstance(attempt, bool) or not 1 <= attempt <= 20:
-            return {"status": "invalid_attempt"}
         if not lead or not lead.get("id"):
             return {"status": "lead_not_found"}
         if lead.get("stage") in ("won", "lost", "repeat"):
             return {"status": "terminal_lead"}
+        if attempt is not None and (not isinstance(attempt, int) or isinstance(attempt, bool) or not 1 <= attempt <= 20):
+            return {"status": "invalid_attempt"}
+        if attempt is None:
+            prior = [x for x in list_activities(lead['id'], limit=500) if x.get('kind') == 'follow_up']
+            attempt = len(prior) + 1
+        if not isinstance(attempt, int) or isinstance(attempt, bool) or not 1 <= attempt <= 20:
+            return {"status": "invalid_attempt"}
         email = lead.get("email")
         if not email:
             return {"status": "no_email"}
@@ -40,9 +40,9 @@ class FollowUpAgent:
                 return {**cached, "status": "already_created"}
             return {"status": "already_processing", "retry_after_seconds": 30}
         body = (
-            f"Hello {lead.get('company_name') or 'there'},\\n\\n"
+            f"Hello {lead.get('company_name') or 'there'},\n\n"
             "I’m following up regarding our export supply opportunity. If this product is relevant "
-            "to your purchasing program, I can send specifications, MOQ, capacity and a commercial offer.\\n\\n"
+            "to your purchasing program, I can send specifications, MOQ, capacity and a commercial offer.\n\n"
             "Best regards"
         )
         try:
