@@ -4,12 +4,50 @@ from agents.verifier import VerificationAgent
 from agents.matcher import MatchAgent
 from agents.outreach import OutreachAgent
 from agents.deal_intelligence import DealIntelligence
-from app.db import upsert_lead, add_activity
 from agents.followup import FollowUpAgent
+from agents.compliance_gatekeeper import ComplianceGatekeeper
+from agents.supplier_onboarding import SupplierOnboardingAgent
+from agents.catalogue_editor import CatalogueEditorAgent
+from agents.quality_auditor import QualityAuditorAgent
+from agents.document_evidence import DocumentEvidenceAgent
+from agents.deal_builder import DealBuilderAgent
+from app.db import upsert_lead, add_activity
 
 
 class Orchestrator:
     def run(self, product, run_id):
+        # Run the compliance preflight before buyer discovery or matching.
+        compliance = ComplianceGatekeeper().run(product)
+        supplier_profile = SupplierOnboardingAgent().run({
+            "company_name": product.get("supplier_company_name"),
+            "country": product.get("supplier_country"),
+            "evidence": product.get("supplier_evidence") or {},
+        }, product)
+        catalogue = CatalogueEditorAgent().run(product)
+        document_evidence = DocumentEvidenceAgent().run(product.get("supplier_evidence") or {})
+
+        if compliance["status"] == "BLOCKED":
+            result = {
+                "run_id": run_id,
+                "status": "blocked_pending_compliance_review",
+                "compliance_review": compliance,
+                "supplier_onboarding": supplier_profile,
+                "catalogue_draft": catalogue,
+                "document_evidence": document_evidence,
+                "deal_packs": [],
+                "markets": [],
+                "buyer_discovery_diagnostics": [],
+                "buyers": [],
+                "matches": [],
+                "outreach": [],
+                "deal_intelligence": {"status": "blocked_pending_compliance_review"},
+                "lead_ids": [],
+                "followups": [],
+                "approval_gates": ["compliance_review", "party_screening", "end_use_review"],
+            }
+            result["quality_audit"] = QualityAuditorAgent().run(result)
+            return result
+
         markets = MarketHunter().run(product)
         discovery_results = BuyerHunter().run(product, markets)
         # Diagnostic/provider-status records are not buyers and must never become CRM leads.
@@ -23,6 +61,17 @@ class Orchestrator:
         ]
         verified = VerificationAgent().run(candidates)
         matches = MatchAgent().run(product, verified)
+        # A preflight checklist is not legal clearance; keep this hold attached to every match.
+        for match in matches:
+            match["compliance_status"] = compliance["status"]
+            match["compliance_clearance"] = False
+            match["human_compliance_review_required"] = True
+
+        # Deal packs remain explicitly held until an operator records both reviews.
+        deal_packs = [DealBuilderAgent().build(
+            product, {"company_name": match.get("company_name") or match.get("title") or ""},
+            compliance_reviewed=False, buyer_identity_reviewed=False,
+        ) for match in matches]
         outreach = OutreachAgent().run(product, matches)
         deals = DealIntelligence().run(product, matches)
         lead_ids = []
@@ -34,9 +83,15 @@ class Orchestrator:
                 followup = FollowUpAgent().schedule_initial(lead_id)
                 followups.append({"lead_id": lead_id, "next_follow_up": followup})
                 add_activity(lead_id, "discovery", "Buyer discovered", match.get("url", ""), "recorded")
-        return {
+
+        result = {
             "run_id": run_id,
             "status": "human_review_required",
+            "compliance_review": compliance,
+            "supplier_onboarding": supplier_profile,
+            "catalogue_draft": catalogue,
+            "document_evidence": document_evidence,
+            "deal_packs": deal_packs,
             "markets": markets,
             "buyer_discovery_diagnostics": discovery_diagnostics,
             "buyers": verified,
@@ -46,6 +101,9 @@ class Orchestrator:
             "lead_ids": lead_ids,
             "followups": followups,
             "approval_gates": [
+                "business_identity", "party_screening", "end_user_and_end_use",
                 "commercial_offer", "final_price", "contract", "payment", "compliance_exceptions"
             ],
         }
+        result["quality_audit"] = QualityAuditorAgent().run(result)
+        return result

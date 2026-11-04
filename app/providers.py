@@ -240,7 +240,30 @@ class AIProvider:
 
 class EmailProvider:
     def send(self, to, subject, body):
-        if (settings.email_provider or '').lower() != 'smtp' or not all((
+        provider = (settings.email_provider or 'none').lower()
+        if provider == 'resend':
+            api_key = getattr(settings, 'email_api_key', '')
+            sender = getattr(settings, 'email_from', '')
+            if not api_key or not sender:
+                return {'status':'draft_only','to':to,'subject':subject,'body':body}
+            try:
+                response = httpx.post(
+                    'https://api.resend.com/emails',
+                    headers={'Authorization': f'Bearer {api_key}',
+                             'Content-Type': 'application/json',
+                             'User-Agent': 'AI-Export-Sales-Network/1.0'},
+                    json={'from': sender, 'to': [to], 'subject': subject, 'text': body},
+                    timeout=20,
+                )
+                response.raise_for_status()
+                payload = response.json()
+                return {'status':'sent','to':to,'subject':subject,
+                        'message_id':payload.get('id'),'provider':'resend'}
+            except Exception:
+                return {'status':'send_failed','to':to,'subject':subject,
+                        'error':'HTTP email delivery failed; verify provider configuration and sender domain.'}
+
+        if provider != 'smtp' or not all((
             settings.smtp_host, settings.smtp_user, settings.smtp_password
         )):
             return {'status':'draft_only','to':to,'subject':subject,'body':body}

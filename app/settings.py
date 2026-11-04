@@ -23,6 +23,9 @@ class Settings:
     search_base_url: str = os.getenv('SEARCH_BASE_URL', '')
     email_provider: str = os.getenv('EMAIL_PROVIDER', 'none')
     email_api_key: str = os.getenv('EMAIL_API_KEY', '')
+    email_from: str = os.getenv('EMAIL_FROM', '')
+    require_email_verification: bool = os.getenv('REQUIRE_EMAIL_VERIFICATION', 'false').lower() == 'true'
+    public_base_url: str = os.getenv('PUBLIC_BASE_URL', '')
     database_url: str = os.getenv('DATABASE_URL', '')
     smtp_host: str = os.getenv('SMTP_HOST', '')
     smtp_port: int = int(os.getenv('SMTP_PORT', '587'))
