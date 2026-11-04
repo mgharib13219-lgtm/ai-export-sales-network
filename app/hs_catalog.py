@@ -93,9 +93,18 @@ def _normalize_code(value, digits=None):
 
 def _parse_hs_csv(raw, source, source_version):
     text = raw.decode("utf-8-sig")
-    reader = csv.DictReader(io.StringIO(text))
+    try:
+        dialect = csv.Sniffer().sniff(text[:8192], delimiters=",;\\t")
+    except csv.Error:
+        dialect = csv.excel
+    reader = csv.DictReader(io.StringIO(text), dialect=dialect)
     if not reader.fieldnames:
         raise ValueError("missing_csv_header")
+    header_names = {_header_token(name) for name in reader.fieldnames if name}
+    if not any(_header_token(key) in header_names for key in CODE_KEYS):
+        raise ValueError("missing_hs_code_column")
+    if not any(_header_token(key) in header_names for key in (*FA_KEYS, *EN_KEYS)):
+        raise ValueError("missing_hs_description_column")
     now = datetime.now(timezone.utc).isoformat()
     prepared = []
     seen = set()
@@ -113,10 +122,11 @@ def _parse_hs_csv(raw, source, source_version):
             raise ValueError(f"invalid_hs_code_at_line_{line_no}")
         if not fa and not en:
             raise ValueError(f"missing_hs_description_at_line_{line_no}")
-        parent = ""
+        expected_parent = code[:-2] if len(code) > 2 else None
+        parent = expected_parent
         if raw_parent:
             parent = _normalize_code(raw_parent, len(code) - 2 if len(code) > 2 else None)
-            if not parent or len(code) <= 2:
+            if not parent or expected_parent is None or parent != expected_parent:
                 raise ValueError(f"invalid_parent_code_at_line_{line_no}")
         if code in seen:
             raise ValueError(f"duplicate_hs_code_at_line_{line_no}")
@@ -126,6 +136,31 @@ def _parse_hs_csv(raw, source, source_version):
     if not prepared:
         raise ValueError("no_valid_rows_found")
     return prepared, now
+
+
+@router.post("/validate-csv", dependencies=[Depends(require_admin)])
+async def validate_hs_csv(request: Request,
+                          source: str = Query(min_length=3, max_length=300),
+                          source_version: str = Query(default="", max_length=100)):
+    """Validate a catalogue file and return a small preview without writing to the database."""
+    raw = await request.body()
+    if not raw or len(raw) > MAX_CSV_BYTES:
+        raise HTTPException(413 if len(raw) > MAX_CSV_BYTES else 400, "csv_missing_or_too_large")
+    try:
+        prepared, _ = _parse_hs_csv(raw, source, source_version)
+    except (UnicodeDecodeError, csv.Error, ValueError) as exc:
+        raise HTTPException(422, str(exc)[:180])
+    return {
+        "status": "valid",
+        "rows_received": len(prepared),
+        "source": source,
+        "source_version": source_version,
+        "preview": [
+            {"hs_code": row[0], "description_fa": row[1],
+             "description_en": row[2], "parent_code": row[3]}
+            for row in prepared[:10]
+        ],
+    }
 
 
 @router.post("/import-csv", dependencies=[Depends(require_admin)])
