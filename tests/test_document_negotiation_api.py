@@ -59,7 +59,11 @@ def test_document_review_requires_registered_hash_and_records_auditable_decision
     monkeypatch.setattr(main, "list_activities", lambda lead_id, limit=500: uploads)
     writes = []
     audits = []
-    monkeypatch.setattr(main, "add_activity", lambda *args: writes.append(args) or 77)
+    def record_activity(*args):
+        writes.append(args)
+        uploads.insert(0, {"kind": args[1], "body": args[3]})
+        return 77
+    monkeypatch.setattr(main, "add_activity", record_activity)
     monkeypatch.setattr(main, "add_audit_event", lambda *args, **kwargs: audits.append((args, kwargs)))
     try:
         client = TestClient(main.app)
@@ -85,7 +89,7 @@ def test_document_review_requires_registered_hash_and_records_auditable_decision
         assert audits[0][0][0] == "crm.document_evidence_reviewed"
         status = client.get(f"/crm/leads/3/documents/{sha}")
         assert status.status_code == 200
-        assert status.json()["workflow_status"] == "pending_review"
+        assert status.json()["workflow_status"] == "accepted_for_next_step"
     finally:
         main.app.dependency_overrides.pop(main.require_admin, None)
         main.app.dependency_overrides.pop(main.require_document_approver, None)
@@ -112,3 +116,32 @@ def test_document_review_validates_hash_and_review_fields(monkeypatch):
     finally:
         main.app.dependency_overrides.pop(main.require_admin, None)
         main.app.dependency_overrides.pop(main.require_document_approver, None)
+
+
+def test_document_review_endpoint_enforces_separate_header_credential(monkeypatch):
+    main.app.dependency_overrides[main.require_admin] = lambda: True
+    monkeypatch.setattr(main, "settings", SimpleNamespace(agent_approver_token="separate-review-token"))
+    monkeypatch.setattr(main, "get_lead", lambda lead_id: {"id": lead_id})
+    sha = "d" * 64
+    monkeypatch.setattr(main, "list_activities", lambda lead_id, limit=500: [{
+        "kind": "document_evidence_uploaded", "body": json.dumps({"sha256": sha})
+    }])
+    monkeypatch.setattr(main, "add_activity", lambda *args: 88)
+    monkeypatch.setattr(main, "add_audit_event", lambda *args, **kwargs: None)
+    payload = {
+        "decision": "rejected",
+        "reviewer_reference": "reviewer@example.com",
+        "reason": "Issuer details do not match the independently supplied reference.",
+    }
+    try:
+        client = TestClient(main.app)
+        url = f"/crm/leads/3/documents/{sha}/review"
+        denied = client.post(url, json=payload)
+        assert denied.status_code == 401
+        accepted = client.post(url, json=payload, headers={
+            "X-Document-Approver-Token": "separate-review-token"
+        })
+        assert accepted.status_code == 200
+        assert accepted.json()["decision"] == "rejected"
+    finally:
+        main.app.dependency_overrides.pop(main.require_admin, None)
