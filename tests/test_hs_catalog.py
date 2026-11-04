@@ -33,13 +33,13 @@ def test_persian_and_arabic_digits_are_normalized_to_ascii():
 
 
 def test_header_aliases_accept_arabic_letter_variants_and_spacing():
-    assert _header_token("كود\u200cتعرفه") == _header_token("کد تعرفه")
-    assert _pick({"كود تعرفه": "0101"}, ("کد تعرفه",)) == "0101"
+    assert _header_token("كد\u200cتعرفه") == _header_token("کد تعرفه")
+    assert _pick({"كد تعرفه": "0101"}, ("کد تعرفه",)) == "0101"
     assert _pick({"شماره تعرفه": "010121"}, ("tariff_code", "شماره تعرفه")) == "010121"
 
 
 def test_parser_accepts_persian_code_and_header_variants():
-    csv_data = "كود تعرفه,شرح کالا,تعداد رقم\n۰۱۰۱,حیوانات زنده,۴\n".encode("utf-8")
+    csv_data = "كد تعرفه,شرح کالا,تعداد رقم\n۰۱۰۱,حیوانات زنده,۴\n".encode("utf-8")
     rows, _ = _parse_hs_csv(csv_data, "IRICA", "2026")
     assert len(rows) == 1
     assert rows[0][0] == "0101"
