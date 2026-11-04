@@ -148,7 +148,12 @@ def system_readiness():
         'search_provider': bool(settings.search_api_key) and (settings.search_provider or '').lower() == 'serpapi',
         'agent_approver_token': bool(settings.agent_approver_token),
         'agent_cron_token': bool(settings.agent_cron_token),
-        'smtp_credentials': all((getattr(settings, 'smtp_host', ''), getattr(settings, 'smtp_user', ''), getattr(settings, 'smtp_password', ''))) and (settings.email_provider or '').lower() == 'smtp',
+        'email_delivery': (
+            ((settings.email_provider or '').lower() == 'resend' and
+             bool(getattr(settings, 'email_api_key', '')) and bool(getattr(settings, 'email_from', ''))) or
+            ((settings.email_provider or '').lower() == 'smtp' and
+             all((getattr(settings, 'smtp_host', ''), getattr(settings, 'smtp_user', ''), getattr(settings, 'smtp_password', ''))))
+        ),
     }
     blockers = []
     if not checks['admin_token']:
@@ -165,8 +170,8 @@ def system_readiness():
         blockers.append('configure_separate_AGENT_APPROVER_TOKEN_for_approval_ledger')
     if not checks['agent_cron_token']:
         blockers.append('configure_matching_AGENT_CRON_TOKEN_in_host_and_scheduler')
-    if not checks['smtp_credentials']:
-        blockers.append('configure_SMTP_for_email_delivery_or_keep_drafts_only')
+    if not checks['email_delivery']:
+        blockers.append('configure_Resend_EMAIL_API_KEY_and_EMAIL_FROM_or_supported_SMTP')
     return {
         'status': 'ready_for_final_test' if not blockers else 'action_required',
         'checks': checks,
@@ -190,7 +195,11 @@ def integration_status():
     if getattr(settings, 'gemini_api_key', '') and ai_mode in ('gemini', 'ensemble'):
         ai_providers.append('gemini')
     ai_configured = bool(ai_providers)
-    email_configured = (settings.email_provider or '').lower() == 'smtp' and all((getattr(settings, 'smtp_host', ''), getattr(settings, 'smtp_user', ''), getattr(settings, 'smtp_password', '')))
+    email_mode = (settings.email_provider or 'none').lower()
+    email_configured = (
+        (email_mode == 'resend' and bool(getattr(settings, 'email_api_key', '')) and bool(getattr(settings, 'email_from', ''))) or
+        (email_mode == 'smtp' and all((getattr(settings, 'smtp_host', ''), getattr(settings, 'smtp_user', ''), getattr(settings, 'smtp_password', ''))))
+    )
     return {
         'status': 'ready' if search_configured and ai_configured else 'action_required',
         'search': {
@@ -212,7 +221,7 @@ def integration_status():
             'configured': bool(email_configured),
             'status': 'configured' if email_configured else 'draft_only',
             'credentials_configured': bool(email_configured),
-            'next_action': None if email_configured else 'Set EMAIL_PROVIDER=smtp and configure SMTP_HOST, SMTP_USER and SMTP_PASSWORD. Drafts are not sent until SMTP is configured.'
+            'next_action': None if email_configured else 'For Render Free, set EMAIL_PROVIDER=resend and configure EMAIL_API_KEY plus EMAIL_FROM; SMTP ports 25/465/587 are blocked. Otherwise use a supported SMTP host/plan.'
         },
         'secrets_exposed': False
     }
