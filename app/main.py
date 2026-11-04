@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 import hmac
 from datetime import datetime, timedelta, timezone
-from fastapi import FastAPI, Depends, HTTPException, Header, Request, UploadFile, File
+from fastapi import FastAPI, Depends, HTTPException, Header, Request, UploadFile, File, Form
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from typing import Optional, List, Literal
@@ -38,6 +38,15 @@ app.include_router(marketplace_ui_router)
 app.include_router(agent_work_router)
 app.include_router(trade_workspace_router)
 app.include_router(hs_catalog_router)
+
+
+def require_document_approver(x_document_approver_token: Optional[str] = Header(default=None)):
+    """Require a separate shared approval credential; it does not identify an individual."""
+    expected = settings.agent_approver_token
+    if not expected:
+        raise HTTPException(status_code=503, detail='AGENT_APPROVER_TOKEN_not_configured')
+    if not x_document_approver_token or not hmac.compare_digest(x_document_approver_token, expected):
+        raise HTTPException(status_code=401, detail='Document_approver_credential_required')
 
 class Product(BaseModel):
     name: str = Field(min_length=2)
@@ -79,6 +88,11 @@ class CounterOffer(BaseModel):
     quote: dict
     counter_unit_price: float = Field(gt=0)
     max_discount_pct: float = Field(default=5.0, ge=0, lt=100)
+
+class DocumentEvidenceReview(BaseModel):
+    decision: Literal['accepted_for_next_step', 'rejected']
+    reviewer_reference: str = Field(min_length=3, max_length=80)
+    reason: str = Field(min_length=10, max_length=1000)
 
 class NegotiationOutcome(BaseModel):
     outcome: Literal['won', 'lost']
@@ -457,7 +471,9 @@ def crm_followup(lead_id:int):
 
 
 @app.post('/crm/documents/extract', dependencies=[Depends(require_admin)])
-async def crm_document_extract(file: UploadFile = File(...)):
+async def crm_document_extract(file: UploadFile = File(...), lead_id: Optional[int] = Form(default=None)):
+    if lead_id is not None and not get_lead(lead_id):
+        raise HTTPException(404, 'lead_not_found')
     filename = file.filename or ''
     try:
         content = await file.read(MAX_FILE_BYTES + 1)
@@ -466,9 +482,108 @@ async def crm_document_extract(file: UploadFile = File(...)):
     if len(content) > MAX_FILE_BYTES:
         raise HTTPException(413, 'file_too_large')
     try:
-        return DocumentExtractor().extract(filename, content)
+        result = DocumentExtractor().extract(filename, content)
     except DocumentExtractionError as exc:
         raise HTTPException(400, str(exc))
+    result['malware_scan_performed'] = False
+    result['workflow_status'] = 'extracted_not_registered'
+    result['evidence_activity_id'] = None
+    if lead_id is not None:
+        metadata = {
+            'sha256': result['sha256'], 'filename': result['filename'],
+            'file_extension': result['file_extension'], 'size_bytes': result['size_bytes'],
+            'character_count': result['character_count'], 'malware_scan_performed': False,
+            'authenticity_verified': False, 'issuer_verified': False,
+            'legal_or_compliance_clearance': False,
+        }
+        activity_id = add_activity(
+            lead_id, 'document_evidence_uploaded', 'Document evidence received',
+            __import__('json').dumps(metadata, ensure_ascii=False), 'pending_review'
+        )
+        add_audit_event('crm.document_evidence_received', 'admin', str(activity_id),
+                        'lead', str(lead_id), metadata)
+        result['workflow_status'] = 'pending_human_review'
+        result['evidence_activity_id'] = activity_id
+    return result
+
+
+@app.get('/crm/leads/{lead_id}/documents/{sha256}', dependencies=[Depends(require_admin)])
+def crm_document_evidence_status(lead_id: int, sha256: str):
+    if len(sha256) != 64 or any(ch not in '0123456789abcdef' for ch in sha256):
+        raise HTTPException(400, 'invalid_sha256')
+    if not get_lead(lead_id):
+        raise HTTPException(404, 'lead_not_found')
+    activities = list_activities(lead_id, limit=500)
+    uploaded = False
+    for item in activities:
+        if item.get('kind') != 'document_evidence_uploaded':
+            continue
+        try:
+            payload = __import__('json').loads(item.get('body') or '{}')
+        except (TypeError, ValueError):
+            continue
+        if payload.get('sha256') == sha256:
+            uploaded = True
+            break
+    if not uploaded:
+        raise HTTPException(404, 'document_evidence_not_found')
+    latest = None
+    for item in activities:
+        if item.get('kind') != 'document_evidence_review':
+            continue
+        try:
+            payload = __import__('json').loads(item.get('body') or '{}')
+        except (TypeError, ValueError):
+            continue
+        if payload.get('sha256') == sha256:
+            latest = payload
+            break
+    return {
+        'lead_id': lead_id, 'sha256': sha256,
+        'workflow_status': latest.get('decision') if latest else 'pending_review',
+        'latest_review': latest,
+        'authenticity_verified': False, 'issuer_verified': False,
+        'malware_scan_performed': False, 'legal_or_compliance_clearance': False,
+    }
+
+
+@app.post('/crm/leads/{lead_id}/documents/{sha256}/review',
+          dependencies=[Depends(require_admin), Depends(require_document_approver)])
+def crm_review_document_evidence(lead_id: int, sha256: str, data: DocumentEvidenceReview):
+    if len(sha256) != 64 or any(ch not in '0123456789abcdef' for ch in sha256):
+        raise HTTPException(400, 'invalid_sha256')
+    if not get_lead(lead_id):
+        raise HTTPException(404, 'lead_not_found')
+    activities = list_activities(lead_id, limit=500)
+    uploaded = False
+    for item in activities:
+        if item.get('kind') != 'document_evidence_uploaded':
+            continue
+        try:
+            payload = __import__('json').loads(item.get('body') or '{}')
+        except (TypeError, ValueError):
+            continue
+        if payload.get('sha256') == sha256:
+            uploaded = True
+            break
+    if not uploaded:
+        raise HTTPException(404, 'document_evidence_not_found')
+    if not all(ch.isalnum() or ch in '._@-' for ch in data.reviewer_reference):
+        raise HTTPException(422, 'invalid_reviewer_reference')
+    review = {
+        'sha256': sha256, 'decision': data.decision,
+        'reviewer_reference': data.reviewer_reference, 'reviewer_identity_verified': False,
+        'reason': data.reason, 'scope': 'human_content_review_for_next_step_only',
+        'authenticity_verified': False, 'issuer_verified': False,
+        'malware_scan_performed': False, 'legal_or_compliance_clearance': False,
+    }
+    activity_id = add_activity(
+        lead_id, 'document_evidence_review', 'Human document evidence review',
+        __import__('json').dumps(review, ensure_ascii=False), data.decision
+    )
+    add_audit_event('crm.document_evidence_reviewed', data.reviewer_reference,
+                    str(activity_id), 'document_evidence', sha256, review)
+    return {'status': 'review_recorded', 'activity_id': activity_id, 'lead_id': lead_id, **review}
 
 
 @app.post('/crm/leads/{lead_id}/negotiation-outcome', dependencies=[Depends(require_admin)])
