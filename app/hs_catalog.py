@@ -100,7 +100,7 @@ def _parse_hs_csv(raw, source, source_version):
     prepared = []
     seen = set()
     for line_no, row in enumerate(reader, start=2):
-        raw_code = re.sub(r"\\s+", "", _pick(row, CODE_KEYS))
+        raw_code = re.sub(r"\s+", "", _pick(row, CODE_KEYS))
         digits = _pick(row, DIGITS_KEYS)
         code = _normalize_code(raw_code, digits or None)
         fa = _pick(row, FA_KEYS)
