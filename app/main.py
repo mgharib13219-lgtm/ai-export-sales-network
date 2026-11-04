@@ -1,10 +1,10 @@
 from contextlib import asynccontextmanager
 import hmac
 from datetime import datetime, timedelta, timezone
-from fastapi import FastAPI, Depends, HTTPException, Header, Request
+from fastapi import FastAPI, Depends, HTTPException, Header, Request, UploadFile, File
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Literal
 from app.workflow import run_opportunity_pipeline
 from app.db import init_db, add_opportunity, list_opportunities, list_leads, get_lead, update_lead, due_followups, add_activity, list_activities, crm_stats, LEAD_STAGES, claim_idempotency, complete_idempotency, fail_idempotency, add_audit_event, list_audit_events, create_deal, get_deal, list_deals, update_deal, save_agent_profile, list_agent_profiles, list_due_agent_profiles, get_agent_profile, record_agent_run, list_agent_runs
 from app.auth import require_admin
@@ -13,7 +13,8 @@ from app.providers import email_provider
 from agents.followup import FollowUpAgent
 from agents.rfq import RFQAgent
 from agents.quote import QuoteAgent
-from agents.negotiation import NegotiationAgent
+from agents.negotiation import NegotiationAgent, NegotiationLearningAgent
+from agents.document_extractor import DocumentExtractor, DocumentExtractionError, MAX_FILE_BYTES
 from app.rate_limit import pipeline_limiter
 from app.marketplace import router as marketplace_router, init_marketplace
 from app.marketplace_ui import router as marketplace_ui_router
@@ -78,6 +79,14 @@ class CounterOffer(BaseModel):
     quote: dict
     counter_unit_price: float = Field(gt=0)
     max_discount_pct: float = Field(default=5.0, ge=0, lt=100)
+
+class NegotiationOutcome(BaseModel):
+    outcome: Literal['won', 'lost']
+    accepted_unit_price: Optional[float] = Field(default=None, gt=0)
+    currency: str = Field(default='UNKNOWN', min_length=3, max_length=10)
+    incoterm: str = Field(default='UNSPECIFIED', max_length=80)
+    payment_terms: str = Field(default='UNSPECIFIED', max_length=200)
+    loss_reason: Optional[str] = Field(default=None, max_length=500)
 
 class DealCreate(BaseModel):
     product_name: str = Field(min_length=2)
@@ -445,6 +454,56 @@ def crm_followup(lead_id:int):
     if not lead: raise HTTPException(404,'lead_not_found')
     if lead.get('stage') in ('won','lost','repeat'): raise HTTPException(400,'terminal_stage')
     return FollowUpAgent().create_draft(lead)
+
+
+@app.post('/crm/documents/extract', dependencies=[Depends(require_admin)])
+async def crm_document_extract(file: UploadFile = File(...)):
+    filename = file.filename or ''
+    try:
+        content = await file.read(MAX_FILE_BYTES + 1)
+    finally:
+        await file.close()
+    if len(content) > MAX_FILE_BYTES:
+        raise HTTPException(413, 'file_too_large')
+    try:
+        return DocumentExtractor().extract(filename, content)
+    except DocumentExtractionError as exc:
+        raise HTTPException(400, str(exc))
+
+
+@app.post('/crm/leads/{lead_id}/negotiation-outcome', dependencies=[Depends(require_admin)])
+def crm_record_negotiation_outcome(lead_id: int, data: NegotiationOutcome):
+    lead = get_lead(lead_id)
+    if not lead:
+        raise HTTPException(404, 'lead_not_found')
+    if lead.get('stage') != 'negotiation':
+        raise HTTPException(400, 'lead_not_in_negotiation')
+    if data.accepted_unit_price is not None and not __import__('math').isfinite(data.accepted_unit_price):
+        raise HTTPException(400, 'invalid_accepted_unit_price')
+    if data.outcome == 'won' and data.accepted_unit_price is None:
+        raise HTTPException(400, 'accepted_unit_price_required_for_won')
+    payload = data.model_dump()
+    activity_id = add_activity(lead_id, 'negotiation_outcome', 'Negotiation outcome',
+                                __import__('json').dumps(payload, ensure_ascii=False), 'recorded')
+    add_audit_event('crm.negotiation_outcome_recorded', 'admin', str(lead_id), 'lead',
+                    str(lead_id), {'activity_id': activity_id, 'outcome': data.outcome})
+    return {'status': 'recorded', 'lead_id': lead_id, 'activity_id': activity_id}
+
+
+@app.get('/crm/negotiation/learning', dependencies=[Depends(require_admin)])
+def crm_negotiation_learning():
+    outcomes = []
+    for lead in list_leads(limit=500):
+        for activity in list_activities(lead['id'], limit=100):
+            if activity.get('kind') != 'negotiation_outcome':
+                continue
+            try:
+                item = __import__('json').loads(activity.get('body') or '{}')
+            except (TypeError, ValueError):
+                continue
+            if isinstance(item, dict):
+                outcomes.append(item)
+    return NegotiationLearningAgent().summarize(outcomes)
 
 @app.post('/crm/leads/{lead_id}/rfq-draft', dependencies=[Depends(require_admin)])
 def crm_rfq_draft(lead_id:int, product: Product):
