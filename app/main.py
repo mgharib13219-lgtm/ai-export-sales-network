@@ -455,6 +455,56 @@ def crm_followup(lead_id:int):
     if lead.get('stage') in ('won','lost','repeat'): raise HTTPException(400,'terminal_stage')
     return FollowUpAgent().create_draft(lead)
 
+
+@app.post('/crm/documents/extract', dependencies=[Depends(require_admin)])
+async def crm_document_extract(file: UploadFile = File(...)):
+    filename = file.filename or ''
+    try:
+        content = await file.read(MAX_FILE_BYTES + 1)
+    finally:
+        await file.close()
+    if len(content) > MAX_FILE_BYTES:
+        raise HTTPException(413, 'file_too_large')
+    try:
+        return DocumentExtractor().extract(filename, content)
+    except DocumentExtractionError as exc:
+        raise HTTPException(400, str(exc))
+
+
+@app.post('/crm/leads/{lead_id}/negotiation-outcome', dependencies=[Depends(require_admin)])
+def crm_record_negotiation_outcome(lead_id: int, data: NegotiationOutcome):
+    lead = get_lead(lead_id)
+    if not lead:
+        raise HTTPException(404, 'lead_not_found')
+    if lead.get('stage') != 'negotiation':
+        raise HTTPException(400, 'lead_not_in_negotiation')
+    if data.accepted_unit_price is not None and not __import__('math').isfinite(data.accepted_unit_price):
+        raise HTTPException(400, 'invalid_accepted_unit_price')
+    if data.outcome == 'won' and data.accepted_unit_price is None:
+        raise HTTPException(400, 'accepted_unit_price_required_for_won')
+    payload = data.model_dump()
+    activity_id = add_activity(lead_id, 'negotiation_outcome', 'Negotiation outcome',
+                                __import__('json').dumps(payload, ensure_ascii=False), 'recorded')
+    add_audit_event('crm.negotiation_outcome_recorded', 'admin', str(lead_id), 'lead',
+                    str(lead_id), {'activity_id': activity_id, 'outcome': data.outcome})
+    return {'status': 'recorded', 'lead_id': lead_id, 'activity_id': activity_id}
+
+
+@app.get('/crm/negotiation/learning', dependencies=[Depends(require_admin)])
+def crm_negotiation_learning():
+    outcomes = []
+    for lead in list_leads(limit=500):
+        for activity in list_activities(lead['id'], limit=100):
+            if activity.get('kind') != 'negotiation_outcome':
+                continue
+            try:
+                item = __import__('json').loads(activity.get('body') or '{}')
+            except (TypeError, ValueError):
+                continue
+            if isinstance(item, dict):
+                outcomes.append(item)
+    return NegotiationLearningAgent().summarize(outcomes)
+
 @app.post('/crm/leads/{lead_id}/rfq-draft', dependencies=[Depends(require_admin)])
 def crm_rfq_draft(lead_id:int, product: Product):
     lead=get_lead(lead_id)
