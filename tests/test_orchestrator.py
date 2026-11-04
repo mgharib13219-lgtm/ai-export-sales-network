@@ -22,6 +22,8 @@ def test_search_diagnostics_never_become_buyer_matches_or_crm_leads(monkeypatch)
     assert result["buyer_discovery_diagnostics"][0]["status"] == "provider_not_configured"
     assert [buyer["title"] for buyer in result["buyers"]] == ["Real Candidate"]
     assert result["lead_ids"] == [17]
+    assert result["document_evidence"]["authenticity_verified"] is False
+    assert result["deal_packs"][0]["status"] == "blocked_pending_compliance_review"
 
 
 def test_compliance_block_stops_buyer_discovery(monkeypatch):
@@ -45,6 +47,8 @@ def test_compliance_block_stops_buyer_discovery(monkeypatch):
     assert result["matches"] == []
     assert result["lead_ids"] == []
     assert result["compliance_review"]["legal_clearance"] is False
+    assert result["document_evidence"]["human_review_required"] is True
+    assert result["deal_packs"] == []
     assert result["quality_audit"]["status"] == "NEEDS_REVIEW"
 
 
@@ -72,4 +76,6 @@ def test_normal_pipeline_attaches_compliance_hold_and_specialist_outputs(monkeyp
     assert result["matches"][0]["human_compliance_review_required"] is True
     assert result["supplier_onboarding"]["identity_verified"] is False
     assert result["catalogue_draft"]["status"] == "draft_only"
+    assert result["document_evidence"]["human_review_required"] is True
+    assert result["deal_packs"][0]["status"] == "blocked_pending_compliance_review"
     assert result["quality_audit"]["human_review_required"] is True
