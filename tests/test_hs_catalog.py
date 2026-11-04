@@ -67,15 +67,15 @@ def test_parser_rejects_code_longer_than_declared_level():
 
 
 def test_parser_accepts_semicolon_delimited_csv():
-    csv_data = "hs_code;description_fa;digits\\n0101;حیوانات زنده;4\\n".encode("utf-8")
+    csv_data = "hs_code;description_fa;digits\n0101;حیوانات زنده;4\n".encode("utf-8")
     rows, _ = _parse_hs_csv(csv_data, "IRICA", "2026")
     assert rows[0][0] == "0101"
 
 
 def test_parser_rejects_a_parent_that_is_not_the_code_prefix():
     csv_data = (
-        "hs_code,description_fa,parent_code\\n"
-        "010121,حیوانات زنده,9999\\n"
+        "hs_code,description_fa,parent_code\n"
+        "010121,حیوانات زنده,9999\n"
     ).encode("utf-8")
     try:
         _parse_hs_csv(csv_data, "IRICA", "2026")
@@ -86,8 +86,8 @@ def test_parser_rejects_a_parent_that_is_not_the_code_prefix():
 
 
 def test_parser_rejects_missing_code_or_description_columns():
-    no_code = "description_fa,digits\\nشرح,4\\n".encode("utf-8")
-    no_description = "hs_code,digits\\n0101,4\\n".encode("utf-8")
+    no_code = "description_fa,digits\nشرح,4\n".encode("utf-8")
+    no_description = "hs_code,digits\n0101,4\n".encode("utf-8")
     for data, expected in (
         (no_code, "missing_hs_code_column"),
         (no_description, "missing_hs_description_column"),
@@ -109,7 +109,7 @@ def test_validate_endpoint_returns_preview_without_database_write():
     app = FastAPI()
     app.include_router(router)
     app.dependency_overrides[require_admin] = lambda: True
-    payload = "hs_code,description_fa,digits\\n0101,حیوانات زنده,4\\n".encode("utf-8")
+    payload = "hs_code,description_fa,digits\n0101,حیوانات زنده,4\n".encode("utf-8")
     response = TestClient(app).post(
         "/trade/hs-catalog/validate-csv?source=IRICA&source_version=2026",
         content=payload,
