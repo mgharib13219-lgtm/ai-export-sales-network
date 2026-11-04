@@ -5,7 +5,7 @@ from agents.document_extractor import DocumentExtractor, DocumentExtractionError
 
 
 def test_extracts_text_and_candidate_fields_without_verifying_document():
-    content = b"Supplier: Example\\nEmail: sales@example.com\\nHS: 123456\\nPrice: USD 12.50"
+    content = b"Supplier: Example\nEmail: sales@example.com\nHS: 123456\nPrice: USD 12.50"
     result = DocumentExtractor().extract("invoice.txt", content)
     assert result["status"] == "extracted"
     assert "sales@example.com" in result["extracted_fields"]["emails"]
@@ -37,5 +37,5 @@ def test_rejects_unsupported_large_and_empty_files():
 
 
 def test_extracts_csv_rows():
-    result = DocumentExtractor().extract("spec.csv", b"field,value\\nproduct,dates\\norigin,Oman")
+    result = DocumentExtractor().extract("spec.csv", b"field,value\nproduct,dates\norigin,Oman")
     assert "product | dates" in result["text"]
