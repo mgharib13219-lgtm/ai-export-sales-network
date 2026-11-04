@@ -65,3 +65,30 @@ def test_quality_auditor_flags_identity_and_outreach_safety_violations():
     assert {item["code"] for item in result["issues"]} >= {
         "automated_identity_claim", "outreach_without_human_gate"
     }
+
+
+def test_product_model_accepts_supplier_onboarding_fields():
+    from app.main import Product
+
+    product = Product(
+        name="Olive oil",
+        supplier_company_name="Example Producer Ltd",
+        supplier_country="Country A",
+        supplier_evidence={"business_registration": "document-ref-1"},
+    )
+    assert product.supplier_company_name == "Example Producer Ltd"
+    assert product.supplier_country == "Country A"
+    assert product.supplier_evidence["business_registration"] == "document-ref-1"
+
+
+def test_supplier_onboarding_reports_complete_facts_but_never_identity_clearance():
+    result = SupplierOnboardingAgent().run(
+        {"company_name": "Example Producer Ltd", "country": "Country A",
+         "evidence": {"business_registration": "ref-1", "representative_authority": "ref-2",
+                      "product_specification": "ref-3", "certificate_evidence": "ref-4",
+                      "facility_or_production_evidence": "ref-5"}},
+        {"name": "Olive oil", "origin": "Country A", "capacity_per_month": 100, "moq": 5},
+    )
+    assert result["status"] == "COMPLETE"
+    assert result["identity_verified"] is False
+    assert result["certificates_verified"] is False
