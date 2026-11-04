@@ -28,3 +28,30 @@ def test_quote_requires_all_cost_inputs():
 def test_quote_rejects_missing_buyer():
     result = QuoteAgent().create_draft(product(), {})
     assert result["status"] == "missing_buyer_fields"
+
+
+def test_quote_rejects_negative_and_non_finite_costs():
+    for bad in (-1, float("nan"), float("inf"), "not-a-number"):
+        p = product()
+        p["shipping"] = bad
+        result = QuoteAgent().create_draft(p, {"company_name": "Buyer LLC"})
+        assert result["status"] == "invalid_cost_input"
+        assert result["field"] == "shipping"
+
+
+def test_quote_rejects_invalid_currency_margin_and_validity():
+    p = product()
+    p["currency"] = "US dollars"
+    assert QuoteAgent().create_draft(p, {"company_name": "Buyer LLC"})["status"] == "invalid_currency"
+
+    p = product()
+    assert QuoteAgent().create_draft(p, {"company_name": "Buyer LLC"}, target_margin_pct=float("nan"))["status"] == "invalid_margin"
+    assert QuoteAgent().create_draft(p, {"company_name": "Buyer LLC"}, validity_days=0)["status"] == "invalid_validity_days"
+
+
+def test_quote_rejects_missing_product_name_without_raising():
+    p = product()
+    del p["name"]
+    result = QuoteAgent().create_draft(p, {"company_name": "Buyer LLC"})
+    assert result["status"] == "missing_product_fields"
+    assert "name" in result["missing_fields"]
