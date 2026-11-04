@@ -1,8 +1,7 @@
 """Iranian customs HS master catalogue with controlled CSV ingestion.
 
-The importer accepts the source file as UTF-8 CSV in the request body. It does
-not fabricate tariff rows: only supplied source rows are persisted, with source
-and import timestamp recorded. Supports 2/4/6/8 digit HS hierarchy codes.
+The importer accepts a UTF-8 CSV request body and upserts only supplied source
+rows. It does not delete older catalogue rows. HS codes use 2/4/6/8 digit levels.
 """
 import csv
 import io
@@ -12,17 +11,32 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from app.auth import require_admin
-from app.db import _con, _execute, _is_postgres
+from app.db import _con, _execute
 
 router = APIRouter(prefix="/trade/hs-catalog", tags=["iran-hs-catalog"])
 
 MAX_CSV_BYTES = 25 * 1024 * 1024
-CODE_KEYS = ("hs_code", "code", "tariff_code", "کد", "کدتعرفه", "کد تعرفه")
-FA_KEYS = ("description_fa", "name_fa", "description", "نام", "شرح", "شرح تعرفه", "شرح کالا")
-EN_KEYS = ("description_en", "name_en", "english_description", "نام انگلیسی", "شرح انگلیسی")
-PARENT_KEYS = ("parent_code", "parent")
-DIGITS_KEYS = ("digits", "length", "رقم")
+CODE_KEYS = (
+    "hs_code", "hs code", "code", "tariff_code", "tariff code",
+    "کد", "کدتعرفه", "کد تعرفه", "شماره تعرفه", "کد hs",
+)
+FA_KEYS = (
+    "description_fa", "name_fa", "description", "نام", "شرح",
+    "شرح تعرفه", "شرح کالا", "توضیحات",
+)
+EN_KEYS = (
+    "description_en", "name_en", "english_description",
+    "english description", "نام انگلیسی", "شرح انگلیسی",
+)
+PARENT_KEYS = ("parent_code", "parent", "کد والد", "کد پدر")
+DIGITS_KEYS = ("digits", "length", "رقم", "تعداد رقم")
 SOURCE_KEYS = ("source", "source_id", "منبع")
+
+_DIGIT_TRANSLATION = str.maketrans(
+    "۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩",
+    "01234567890123456789",
+)
+_HEADER_TRANSLATION = str.maketrans({"ي": "ی", "ك": "ک", "\u200c": ""})
 
 
 def init_hs_catalog():
@@ -44,23 +58,35 @@ def init_hs_catalog():
     con.close()
 
 
+def _header_token(value):
+    value = str(value or "").strip().lower().translate(_HEADER_TRANSLATION)
+    return re.sub(r"[\s_\-]+", "", value)
+
+
 def _pick(row, keys):
-    normalized = {str(k).strip().lower(): (v or "").strip() for k, v in row.items() if k is not None}
+    normalized = {_header_token(k): (v or "").strip() for k, v in row.items() if k is not None}
     for key in keys:
-        value = normalized.get(key.lower())
+        value = normalized.get(_header_token(key))
         if value:
             return value
     return ""
 
 
 def _normalize_code(value, digits=None):
-    raw = str(value or "").strip().replace(",", "").replace(" ", "")
+    raw = str(value or "").strip().translate(_DIGIT_TRANSLATION)
+    raw = raw.replace(",", "").replace(" ", "")
     if raw.endswith(".0"):
         raw = raw[:-2]
-    if not raw.isdigit():
+    if not raw.isascii() or not raw.isdigit():
         return ""
-    width = int(digits) if str(digits or "").isdigit() else len(raw)
-    if width not in (2, 4, 6, 8):
+
+    digits_text = str(digits or "").strip().translate(_DIGIT_TRANSLATION)
+    if digits_text.endswith(".0"):
+        digits_text = digits_text[:-2]
+    if digits_text and not digits_text.isdigit():
+        return ""
+    width = int(digits_text) if digits_text else len(raw)
+    if width not in (2, 4, 6, 8) or len(raw) > width:
         return ""
     return raw.zfill(width)
 
@@ -69,7 +95,7 @@ def _normalize_code(value, digits=None):
 async def import_hs_csv(request: Request,
                         source: str = Query(min_length=3, max_length=300),
                         source_version: str = Query(default="", max_length=100)):
-    """Replace/upsert tariff descriptions from an explicitly supplied source CSV."""
+    """Upsert descriptions from an explicitly supplied source CSV; retain older rows."""
     raw = await request.body()
     if not raw or len(raw) > MAX_CSV_BYTES:
         raise HTTPException(413 if len(raw) > MAX_CSV_BYTES else 400, "csv_missing_or_too_large")
@@ -89,10 +115,12 @@ async def import_hs_csv(request: Request,
             en = _pick(row, EN_KEYS)
             raw_parent = _pick(row, PARENT_KEYS)
             row_source = _pick(row, SOURCE_KEYS) or source
-            if not raw_code and not fa:
+            if not raw_code and not fa and not en:
                 continue
             if not code:
                 raise ValueError(f"invalid_hs_code_at_line_{line_no}")
+            if not fa and not en:
+                raise ValueError(f"missing_hs_description_at_line_{line_no}")
             parent = ""
             if raw_parent:
                 parent = _normalize_code(raw_parent, len(code) - 2 if len(code) > 2 else None)
