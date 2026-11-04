@@ -9,6 +9,8 @@ from agents.compliance_gatekeeper import ComplianceGatekeeper
 from agents.supplier_onboarding import SupplierOnboardingAgent
 from agents.catalogue_editor import CatalogueEditorAgent
 from agents.quality_auditor import QualityAuditorAgent
+from agents.document_evidence import DocumentEvidenceAgent
+from agents.deal_builder import DealBuilderAgent
 from app.db import upsert_lead, add_activity
 
 
@@ -22,6 +24,7 @@ class Orchestrator:
             "evidence": product.get("supplier_evidence") or {},
         }, product)
         catalogue = CatalogueEditorAgent().run(product)
+        document_evidence = DocumentEvidenceAgent().run(product.get("supplier_evidence") or {})
 
         if compliance["status"] == "BLOCKED":
             result = {
@@ -30,6 +33,8 @@ class Orchestrator:
                 "compliance_review": compliance,
                 "supplier_onboarding": supplier_profile,
                 "catalogue_draft": catalogue,
+                "document_evidence": document_evidence,
+                "deal_packs": [],
                 "markets": [],
                 "buyer_discovery_diagnostics": [],
                 "buyers": [],
@@ -62,6 +67,11 @@ class Orchestrator:
             match["compliance_clearance"] = False
             match["human_compliance_review_required"] = True
 
+        # Deal packs remain explicitly held until an operator records both reviews.
+        deal_packs = [DealBuilderAgent().build(
+            product, {"company_name": match.get("company_name") or match.get("title") or ""},
+            compliance_reviewed=False, buyer_identity_reviewed=False,
+        ) for match in matches]
         outreach = OutreachAgent().run(product, matches)
         deals = DealIntelligence().run(product, matches)
         lead_ids = []
@@ -80,6 +90,8 @@ class Orchestrator:
             "compliance_review": compliance,
             "supplier_onboarding": supplier_profile,
             "catalogue_draft": catalogue,
+            "document_evidence": document_evidence,
+            "deal_packs": deal_packs,
             "markets": markets,
             "buyer_discovery_diagnostics": discovery_diagnostics,
             "buyers": verified,
