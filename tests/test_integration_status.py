@@ -59,5 +59,5 @@ def test_email_remains_draft_only_even_with_provider_credentials(monkeypatch):
     assert result["email"]["configured"] is False
     assert result["email"]["status"] == "draft_only"
     assert result["email"]["credentials_configured"] is False
-    assert "SMTP_HOST" in result["email"]["next_action"]
+    assert "EMAIL_FROM" in result["email"]["next_action"]
     assert "test-email-key" not in str(result)

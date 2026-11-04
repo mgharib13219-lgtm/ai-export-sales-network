@@ -31,7 +31,10 @@ button.secondary{background:#eef2f6;color:#182230;border:1px solid #d7dde5}
 <input id="company" placeholder="نام شرکت">
 <input id="country" placeholder="کشور">
 <select id="role"><option value="producer">تولیدکننده / تأمین‌کننده</option><option value="buyer">خریدار</option></select>
-</div><div class="grid"><button id="register">ایجاد حساب</button><button id="login" class="secondary">ورود</button></div><p id="authmsg" class="status" aria-live="polite"></p></section>
+</div><div class="grid"><button id="register">ایجاد حساب</button><button id="login" class="secondary">ورود</button></div><p id="authmsg" class="status" aria-live="polite"></p>
+<div class="grid"><input id="verifytoken" placeholder="کد تأیید ایمیل دریافتی"><button id="confirmverify" class="secondary">تأیید ایمیل</button><button id="resendverify" class="secondary">ارسال مجدد تأییدیه</button></div>
+<div class="grid"><button id="forgotpassword" class="secondary">ارسال کد بازیابی گذرواژه</button><input id="resettoken" placeholder="کد بازیابی دریافتی"><input id="resetnewpassword" type="password" placeholder="گذرواژه جدید (حداقل ۱۲ نویسه)"><button id="resetpassword" class="secondary">ثبت گذرواژه جدید</button></div>
+<p id="authflowmsg" class="status" aria-live="polite"></p></section>
 <section id="account-settings" hidden><h2>امنیت حساب</h2><div class="grid"><input id="currentpass" type="password" placeholder="گذرواژه فعلی"><input id="newpass" type="password" placeholder="گذرواژه جدید (حداقل ۱۲ نویسه)"></div><button id="changepass">تغییر گذرواژه و خروج از همه دستگاه‌ها</button><p id="passwordmsg" class="status"></p></section>
 <section><h2>فهرست جامع تعرفه‌های گمرکی ایران (HS)</h2>
 <p class="muted">جست‌وجو بر اساس کد تعرفه یا شرح فارسی/انگلیسی؛ نمایش فقط ردیف‌هایی که از منبع رسمی/مستند وارد شده‌اند.</p>
@@ -93,6 +96,22 @@ async function register(){
  try{const data=await api('/marketplace/register',{method:'POST',body:JSON.stringify({email:$('email').value,company_name:$('company').value,country:$('country').value,role:$('role').value,password:$('password').value})});showMessage('authmsg',data.next_step);}
  catch(e){showMessage('authmsg',e.message);}
 }
+async function confirmEmail(){
+ try{const data=await api('/marketplace/email-verification/confirm',{method:'POST',body:JSON.stringify({token:$('verifytoken').value.trim()})});showMessage('authflowmsg',data);}
+ catch(e){showMessage('authflowmsg',e.message);}
+}
+async function resendVerification(){
+ try{const data=await api('/marketplace/email-verification/resend',{method:'POST',body:JSON.stringify({email:$('email').value})});showMessage('authflowmsg',data);}
+ catch(e){showMessage('authflowmsg',e.message);}
+}
+async function forgotPassword(){
+ try{const data=await api('/marketplace/password/forgot',{method:'POST',body:JSON.stringify({email:$('email').value})});showMessage('authflowmsg',data);}
+ catch(e){showMessage('authflowmsg',e.message);}
+}
+async function resetPassword(){
+ try{const data=await api('/marketplace/password/reset',{method:'POST',body:JSON.stringify({token:$('resettoken').value.trim(),new_password:$('resetnewpassword').value})});showMessage('authflowmsg',data);}
+ catch(e){showMessage('authflowmsg',e.message);}
+}
 async function login(){
  try{const data=await api('/marketplace/login',{method:'POST',body:JSON.stringify({email:$('email').value,password:$('password').value})});sessionStorage.setItem('market_token',data.access_token);user=data.user;renderAccount();}
  catch(e){showMessage('authmsg',e.message);}
@@ -122,6 +141,8 @@ async function loadRequests(){
  }catch(e){showMessage('requests',e.message);}
 }
 $('register').addEventListener('click',register);$('login').addEventListener('click',login);$('changepass').addEventListener('click',changePassword);
+$('confirmverify').addEventListener('click',confirmEmail);$('resendverify').addEventListener('click',resendVerification);
+$('forgotpassword').addEventListener('click',forgotPassword);$('resetpassword').addEventListener('click',resetPassword);
 $('publish').addEventListener('click',publish);$('submitrequest').addEventListener('click',submitRequest);
 $('searchbtn').addEventListener('click',()=>loadProducts().catch(e=>showMessage('products',e.message)));
 $('hscodebtn').addEventListener('click',()=>loadHsCatalog().catch(e=>showMessage('hscatalog',e.message)));
