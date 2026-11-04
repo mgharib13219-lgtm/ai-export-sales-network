@@ -94,7 +94,7 @@ def _normalize_code(value, digits=None):
 def _parse_hs_csv(raw, source, source_version):
     text = raw.decode("utf-8-sig")
     try:
-        dialect = csv.Sniffer().sniff(text[:8192], delimiters=",;\\t")
+        dialect = csv.Sniffer().sniff(text[:8192], delimiters=",;\t")
     except csv.Error:
         dialect = csv.excel
     reader = csv.DictReader(io.StringIO(text), dialect=dialect)
