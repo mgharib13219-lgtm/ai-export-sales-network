@@ -80,3 +80,8 @@ See [`docs/FINAL_ACCEPTANCE_TEST.md`](docs/FINAL_ACCEPTANCE_TEST.md) for the con
 ## ERP and commerce integrations
 
 The platform uses a vendor-neutral connector architecture so customers can optionally connect an existing ERP or B2B shop without replacing the marketplace, buyer discovery, trade intelligence or CRM. CosmoShop and Forterro are candidate ecosystems only; no vendor integration, account, subscription or credential is active. Integrations are disabled by default and must begin with a tenant-isolated, read-only sandbox pilot. See [`docs/ERP_COMMERCE_CONNECTOR_ARCHITECTURE.md`](docs/ERP_COMMERCE_CONNECTOR_ARCHITECTURE.md) for data ownership, connector requirements, rollout gates and security controls.
+
+
+## HS tariff catalogue import
+
+Use the preflight validation endpoint before uploading customs tariff data. The procedure, supported CSV formats, admin-token header, safe upsert semantics, and verification calls are documented in [`docs/HS_CATALOG_IMPORT.md`](docs/HS_CATALOG_IMPORT.md).
