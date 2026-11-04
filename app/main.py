@@ -1,10 +1,10 @@
 from contextlib import asynccontextmanager
 import hmac
 from datetime import datetime, timedelta, timezone
-from fastapi import FastAPI, Depends, HTTPException, Header, Request
+from fastapi import FastAPI, Depends, HTTPException, Header, Request, UploadFile, File
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Literal
 from app.workflow import run_opportunity_pipeline
 from app.db import init_db, add_opportunity, list_opportunities, list_leads, get_lead, update_lead, due_followups, add_activity, list_activities, crm_stats, LEAD_STAGES, claim_idempotency, complete_idempotency, fail_idempotency, add_audit_event, list_audit_events, create_deal, get_deal, list_deals, update_deal, save_agent_profile, list_agent_profiles, list_due_agent_profiles, get_agent_profile, record_agent_run, list_agent_runs
 from app.auth import require_admin
@@ -13,7 +13,8 @@ from app.providers import email_provider
 from agents.followup import FollowUpAgent
 from agents.rfq import RFQAgent
 from agents.quote import QuoteAgent
-from agents.negotiation import NegotiationAgent
+from agents.negotiation import NegotiationAgent, NegotiationLearningAgent
+from agents.document_extractor import DocumentExtractor, DocumentExtractionError, MAX_FILE_BYTES
 from app.rate_limit import pipeline_limiter
 from app.marketplace import router as marketplace_router, init_marketplace
 from app.marketplace_ui import router as marketplace_ui_router
@@ -78,6 +79,14 @@ class CounterOffer(BaseModel):
     quote: dict
     counter_unit_price: float = Field(gt=0)
     max_discount_pct: float = Field(default=5.0, ge=0, lt=100)
+
+class NegotiationOutcome(BaseModel):
+    outcome: Literal['won', 'lost']
+    accepted_unit_price: Optional[float] = Field(default=None, gt=0)
+    currency: str = Field(default='UNKNOWN', min_length=3, max_length=10)
+    incoterm: str = Field(default='UNSPECIFIED', max_length=80)
+    payment_terms: str = Field(default='UNSPECIFIED', max_length=200)
+    loss_reason: Optional[str] = Field(default=None, max_length=500)
 
 class DealCreate(BaseModel):
     product_name: str = Field(min_length=2)
