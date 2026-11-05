@@ -14,7 +14,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from app.db import _con, _execute, _is_postgres, add_audit_event
+from app.db import _con, _execute, _is_postgres, _column_exists, add_audit_event
 from app.auth import require_admin
 from app.marketplace_matching import rank_listings_for_request
 
@@ -42,7 +42,8 @@ def init_marketplace():
         """CREATE TABLE IF NOT EXISTS marketplace_requests (
             id INTEGER PRIMARY KEY, buyer_id INTEGER NOT NULL, title TEXT NOT NULL,
             category TEXT NOT NULL, specification TEXT NOT NULL, destination TEXT NOT NULL,
-            quantity TEXT, status TEXT NOT NULL DEFAULT 'open',
+            quantity TEXT, share_contact INTEGER NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'open',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""",
         """CREATE TABLE IF NOT EXISTS marketplace_verifications (
             id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, verification_type TEXT NOT NULL,
@@ -74,6 +75,9 @@ def init_marketplace():
     ])
     for statement in statements:
         _execute(con, statement)
+    # Safe additive migration for databases created before explicit buyer consent existed.
+    if not _column_exists(con, "marketplace_requests", "share_contact"):
+        _execute(con, "ALTER TABLE marketplace_requests ADD COLUMN share_contact INTEGER NOT NULL DEFAULT 0")
     now = datetime.now(timezone.utc).isoformat()
     _execute(con, "DELETE FROM marketplace_sessions WHERE expires_at<=?", (now,))
     _execute(con, "DELETE FROM marketplace_login_attempts WHERE window_started_at<=? AND (locked_until IS NULL OR locked_until<=?)",
@@ -142,6 +146,8 @@ class BuyRequest(BaseModel):
     specification: str = Field(min_length=10, max_length=8000)
     destination: str = Field(min_length=2, max_length=100)
     quantity: Optional[str] = Field(default=None, max_length=200)
+    # Contact details are never exposed to suppliers unless the buyer explicitly opts in.
+    share_contact: bool = False
 
 
 class VerificationRequest(BaseModel):
@@ -387,8 +393,9 @@ def create_request(data: BuyRequest, user=Depends(_current_user)):
     _require_role(user, "buyer")
     con = _con()
     request_id = _id_insert(con, """INSERT INTO marketplace_requests
-        (buyer_id,title,category,specification,destination,quantity) VALUES(?,?,?,?,?,?)""",
-        (user["id"], data.title, data.category, data.specification, data.destination, data.quantity))
+        (buyer_id,title,category,specification,destination,quantity,share_contact) VALUES(?,?,?,?,?,?,?)""",
+        (user["id"], data.title, data.category, data.specification, data.destination, data.quantity,
+         1 if data.share_contact else 0))
     con.commit()
     con.close()
     add_audit_event("marketplace.buy_request_created", user["email"], str(request_id),
@@ -401,9 +408,9 @@ def update_buy_request(request_id: int, data: BuyRequest, user=Depends(_current_
     _require_role(user, "buyer")
     con = _con()
     cur = _execute(con, """UPDATE marketplace_requests SET title=?,category=?,specification=?,
-        destination=?,quantity=? WHERE id=? AND buyer_id=? AND status='open'""",
+        destination=?,quantity=?,share_contact=? WHERE id=? AND buyer_id=? AND status='open'""",
         (data.title, data.category, data.specification, data.destination, data.quantity,
-         request_id, user["id"]))
+         1 if data.share_contact else 0, request_id, user["id"]))
     con.commit()
     con.close()
     if cur.rowcount != 1:
@@ -432,17 +439,40 @@ def close_buy_request(request_id: int, user=Depends(_current_user)):
 def list_requests(category: Optional[str] = Query(default=None, max_length=120),
                   limit: int = Query(default=50, ge=1, le=100), user=Depends(_current_user)):
     _require_role(user, "producer")
-    clauses, values = ["status='open'"], []
+    from app.subscriptions import get_effective_subscription
+    plan_code = get_effective_subscription(user["id"])["plan_code"]
+    clauses, values = ["r.status='open'"], []
     if category:
-        clauses.append("LOWER(category)=?")
+        clauses.append("LOWER(r.category)=?")
         values.append(category.lower())
-    where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+    where = " WHERE " + " AND ".join(clauses)
+    if plan_code == "free":
+        # Free accounts see only a public summary, never the buyer's specification or identity.
+        sql = """SELECT r.id,r.title,r.category,r.destination,r.status,r.created_at
+            FROM marketplace_requests r""" + where + " ORDER BY r.id DESC LIMIT ?"
+    elif plan_code == "starter":
+        sql = """SELECT r.id,r.title,r.category,SUBSTR(r.specification,1,220) AS specification_preview,
+            r.destination,r.quantity,r.status,r.created_at
+            FROM marketplace_requests r""" + where + " ORDER BY r.id DESC LIMIT ?"
+    elif plan_code == "growth":
+        sql = """SELECT r.id,r.title,r.category,r.specification,r.destination,r.quantity,r.status,r.created_at
+            FROM marketplace_requests r""" + where + " ORDER BY r.id DESC LIMIT ?"
+    else:
+        # Premium contact disclosure is still gated by the buyer's separate opt-in.
+        sql = """SELECT r.id,r.title,r.category,r.specification,r.destination,r.quantity,r.status,r.created_at,
+            CASE WHEN r.share_contact=1 THEN u.company_name ELSE NULL END AS buyer_company,
+            CASE WHEN r.share_contact=1 THEN u.country ELSE NULL END AS buyer_country,
+            CASE WHEN r.share_contact=1 THEN u.email ELSE NULL END AS buyer_email
+            FROM marketplace_requests r JOIN marketplace_users u ON u.id=r.buyer_id""" + where + " ORDER BY r.id DESC LIMIT ?"
     con = _con()
-    rows = _execute(con, "SELECT id,title,category,specification,destination,quantity,status,created_at "
-                   "FROM marketplace_requests" + where + " ORDER BY id DESC LIMIT ?",
-                   values + [max(1, min(limit, 100))]).fetchall()
+    rows = _execute(con, sql, values + [max(1, min(limit, 100))]).fetchall()
     con.close()
-    return [dict(r) for r in rows]
+    return {"plan_code": plan_code, "access_level": {
+                "free": "public_summary", "starter": "limited_preview",
+                "growth": "full_specification", "premium": "full_specification_and_buyer_opt_in"
+            }[plan_code],
+            "requests": [dict(row) for row in rows],
+            "privacy_note": "Buyer identity and contact details are shown only to Premium suppliers when the buyer explicitly opted in."}
 
 
 @router.post("/verification")
