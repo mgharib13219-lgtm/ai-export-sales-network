@@ -614,3 +614,53 @@ def match_request_to_products(request_id: int, user=Depends(_current_user)):
             "access_level": {"free": "public_summary", "starter": "limited_preview",
                              "growth": "full_specification", "premium": "full_specification"}[plan_code],
             "note": "Discovery ranking only. Identity, product claims, certificates and destination compliance remain unverified."}
+
+
+@router.get("/requests/mine")
+def list_my_buy_requests(limit: int = Query(default=50, ge=1, le=100),
+                         user=Depends(_current_user)):
+    """Return a buyer's own requests and public supplier matches without private contact data."""
+    _require_role(user, "buyer")
+    con = _con()
+    try:
+        request_rows = _execute(con, """SELECT id,title,category,specification,destination,
+            quantity,share_contact,status,created_at FROM marketplace_requests
+            WHERE buyer_id=? ORDER BY id DESC LIMIT ?""",
+            (user["id"], max(1, min(limit, 100)))).fetchall()
+        listing_rows = _execute(con, """SELECT p.id,p.name,p.category,p.description,p.origin,
+            p.capacity,p.moq,p.target_markets,u.company_name,u.country
+            FROM marketplace_products p JOIN marketplace_users u ON u.id=p.owner_id
+            WHERE p.status='published' ORDER BY p.id DESC LIMIT 500""").fetchall()
+    finally:
+        con.close()
+    listings = [dict(row) for row in listing_rows]
+    result = []
+    for row in request_rows:
+        request_data = dict(row)
+        ranked = rank_listings_for_request(request_data, listings, limit=10)
+        by_id = {int(item["id"]): item for item in listings}
+        matches = []
+        for match in ranked:
+            listing = by_id.get(int(match["listing_id"])) if match.get("listing_id") is not None else None
+            if not listing:
+                continue
+            matches.append({
+                "listing_id": listing["id"],
+                "product_name": listing["name"],
+                "category": listing["category"],
+                "description": listing["description"],
+                "origin": listing["origin"],
+                "capacity": listing["capacity"],
+                "moq": listing["moq"],
+                "target_markets": listing["target_markets"],
+                "supplier_company": listing["company_name"],
+                "supplier_country": listing["country"],
+                "score": match["score"],
+                "reasons": match["reasons"],
+                "information_gaps": match["information_gaps"],
+                "mandatory_holds": match["mandatory_holds"],
+                "automatically_cleared": False,
+            })
+        request_data["matches"] = matches
+        result.append(request_data)
+    return result
