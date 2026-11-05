@@ -102,6 +102,16 @@ async function loadSubscription(){
  $('subscriptionstate').textContent='پلن فعلی: '+(ent.name||current.plan_code)+' · آگهی فعال مجاز: '+(ent.published_listing_limit||0)+' · اعتبار جست‌وجوی ماهانه: '+credits.used+'/'+credits.limit+' · اعتبار باقی‌مانده: '+credits.remaining;
  $('agentcredits').textContent='اعتبار جست‌وجوی این ماه: '+credits.remaining+' از '+credits.limit+' باقی مانده است.';
  const box=$('plans');box.replaceChildren();
+ if(current.billing_provider==='stripe'){
+  const manage=node('button','secondary','مدیریت یا لغو اشتراک');
+  manage.addEventListener('click',async()=>{
+   try{
+    const result=await api('/marketplace/subscription/billing/portal',{method:'POST'});
+    window.location.assign(result.portal_url);
+   }catch(e){showMessage('upgradeMessage',e.message);}
+  });
+  box.append(manage);
+ }
  (plans.plans||[]).forEach(p=>{
   const card=node('article','card');
   card.append(node('h3','',p.name),node('p','',p.monthly_price_display||'قیمت هنوز تعیین نشده'));
