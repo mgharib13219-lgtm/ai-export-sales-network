@@ -34,6 +34,11 @@ def init_buyer_discovery():
         UNIQUE(user_id,source_url))""")
     _execute(con, """CREATE INDEX IF NOT EXISTS idx_marketplace_buyer_candidates_owner
         ON marketplace_buyer_candidates(user_id,review_status,collected_at)""")
+    _execute(con, """CREATE INDEX IF NOT EXISTS idx_marketplace_buyer_candidates_retention
+        ON marketplace_buyer_candidates(retention_until)""")
+    # Expired rows are purged at startup and again when suppliers open their list.
+    _execute(con, "DELETE FROM marketplace_buyer_candidates WHERE retention_until<=?",
+             (datetime.now(timezone.utc).isoformat(),))
     con.commit()
     con.close()
 
@@ -47,13 +52,6 @@ class BuyerDiscoverySearch(BaseModel):
 class CandidateReview(BaseModel):
     relevant: bool
     note: str = Field(default="", max_length=1000)
-
-
-def _insert_id(con, sql, values):
-    if _is_postgres():
-        sql += " RETURNING id"
-    cur = _execute(con, sql, values)
-    return cur.fetchone()["id"] if _is_postgres() else cur.lastrowid
 
 
 @router.post("/buyer-discovery")
@@ -124,6 +122,8 @@ def list_buyer_candidates(status: Optional[str] = Query(default=None, max_length
         clauses.append("review_status=?")
         values.append(status)
     con = _con()
+    _execute(con, "DELETE FROM marketplace_buyer_candidates WHERE retention_until<=?",
+             (datetime.now(timezone.utc).isoformat(),))
     rows = _execute(con, """SELECT id,search_query,target_country,title,source_url,snippet,
         source_provider,source_type,collection_basis,review_status,reviewer_note,collected_at,retention_until
         FROM marketplace_buyer_candidates WHERE """ + " AND ".join(clauses) +
