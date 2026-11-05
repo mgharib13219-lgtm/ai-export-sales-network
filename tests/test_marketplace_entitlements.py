@@ -79,18 +79,18 @@ def test_lead_details_are_plan_gated_and_contact_requires_buyer_opt_in(tmp_path,
 
     supplier_id, supplier_headers = _register(client, "supplier@example.com", "producer")
     free_view = client.get("/marketplace/requests", headers=supplier_headers).json()
-    assert free_view["plan_code"] == "free"
-    assert "specification" not in free_view["requests"][0]
-    assert "buyer_email" not in free_view["requests"][0]
+    assert isinstance(free_view, list)
+    assert "specification" not in free_view[0]
+    assert "buyer_email" not in free_view[0]
 
     assert _grant(client, supplier_id, "growth").status_code == 200
     growth_view = client.get("/marketplace/requests", headers=supplier_headers).json()
-    assert "ATEX documentation" in growth_view["requests"][0]["specification"]
-    assert "buyer_email" not in growth_view["requests"][0]
+    assert "ATEX documentation" in growth_view[0]["specification"]
+    assert "buyer_email" not in growth_view[0]
 
     assert _grant(client, supplier_id, "premium").status_code == 200
     premium_view = client.get("/marketplace/requests", headers=supplier_headers).json()
-    assert premium_view["requests"][0]["buyer_email"] == "buyer@example.com"
+    assert premium_view[0]["buyer_email"] == "buyer@example.com"
 
 
 def test_buyer_contact_is_hidden_when_buyer_did_not_opt_in(tmp_path, monkeypatch):
@@ -104,8 +104,8 @@ def test_buyer_contact_is_hidden_when_buyer_did_not_opt_in(tmp_path, monkeypatch
     supplier_id, supplier_headers = _register(client, "premium@example.com", "producer")
     assert _grant(client, supplier_id, "premium").status_code == 200
     view = client.get("/marketplace/requests", headers=supplier_headers).json()
-    assert view["requests"][0]["buyer_email"] is None
-    assert view["requests"][0]["buyer_company"] is None
+    assert view[0]["buyer_email"] is None
+    assert view[0]["buyer_company"] is None
 
 
 def test_monthly_agent_credits_are_reserved_atomically_and_enforced(tmp_path, monkeypatch):
