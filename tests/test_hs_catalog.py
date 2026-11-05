@@ -40,7 +40,7 @@ def test_hs_level_filter_only_accepts_hierarchy_widths():
 def test_csv_parser_accepts_bom_and_preserves_code_and_source_metadata():
     csv_text = "\ufeffhs_code,description_fa,description_en,digits\n101,نمونه,Sample,4\n"
     rows = _prepare_csv_rows(csv_text, "Official source", "1405-v1", "2026-11-05T00:00:00Z")
-    assert rows == [("0101", "نمونه", "Sample", None, "Official source",
+    assert rows == [("0101", "نمونه", "Sample", "01", "Official source",
                      "1405-v1", "2026-11-05T00:00:00Z", 1)]
 
 
