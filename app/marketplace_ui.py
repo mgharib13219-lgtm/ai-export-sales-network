@@ -170,7 +170,12 @@ function renderAccount(){
  $('logout').hidden=!user;$('auth').hidden=!!user;
  $('producer').hidden=!user||user.role!=='producer';$('buyer').hidden=!user||user.role!=='buyer';$('account-settings').hidden=!user;
  $('subscription').hidden=!user||user.role!=='producer';
- if(user&&user.role==='producer')loadSubscription().catch(e=>showMessage('subscriptionstate',e.message));
+ if(user&&user.role==='producer'){
+  const billingState=new URLSearchParams(window.location.search).get('billing');
+  if(billingState==='success')showMessage('upgradeMessage','از صفحهٔ پرداخت برگشته‌اید؛ پلن فقط پس از تأیید امن وب‌هوک به‌روزرسانی می‌شود.');
+  else if(billingState==='cancel')showMessage('upgradeMessage','پرداخت لغو شد؛ پلن فعلی شما بدون تغییر باقی ماند.');
+  loadSubscription().catch(e=>showMessage('subscriptionstate',e.message));
+ }
 }
 async function changePassword(){
  try{const data=await api('/marketplace/password',{method:'POST',body:JSON.stringify({current_password:$('currentpass').value,new_password:$('newpass').value})});showMessage('passwordmsg',data);sessionStorage.removeItem('market_token');user=null;renderAccount();}
