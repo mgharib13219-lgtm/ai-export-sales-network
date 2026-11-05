@@ -471,12 +471,9 @@ def list_requests(category: Optional[str] = Query(default=None, max_length=120),
         rows = _execute(con, sql, values + [max(1, min(limit, 100))]).fetchall()
     finally:
         con.close()
-    return {"plan_code": plan_code, "access_level": {
-                "free": "public_summary", "starter": "limited_preview",
-                "growth": "full_specification", "premium": "full_specification_and_buyer_opt_in"
-            }[plan_code],
-            "requests": [dict(row) for row in rows],
-            "privacy_note": "Buyer identity and contact details are shown only to Premium suppliers when the buyer explicitly opted in."}
+    # Preserve the existing list response contract; plan limits are enforced by
+    # which columns are selected, not by changing the public API shape.
+    return [dict(row) for row in rows]
 
 
 @router.post("/verification")
