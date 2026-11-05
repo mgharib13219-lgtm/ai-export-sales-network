@@ -1,11 +1,11 @@
 import sqlite3
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.testclient import TestClient
 
 import app.marketplace as marketplace
 import app.subscriptions as subscriptions
-from app.settings import settings
+from app.auth import require_admin
 
 
 def _client(tmp_path, monkeypatch):
@@ -21,14 +21,19 @@ def _client(tmp_path, monkeypatch):
     monkeypatch.setattr(subscriptions, "_con", connect)
     monkeypatch.setattr(marketplace, "add_audit_event", lambda *args, **kwargs: None)
     monkeypatch.setattr(subscriptions, "add_audit_event", lambda *args, **kwargs: None)
-    monkeypatch.setattr(settings, "environment", "production")
-    monkeypatch.setattr(settings, "admin_token", "test-admin-token")
     marketplace.init_marketplace()
     subscriptions.init_subscriptions()
 
     app = FastAPI()
     app.include_router(marketplace.router)
     app.include_router(subscriptions.router)
+
+    def admin_override(request: Request):
+        if request.headers.get("x-admin-token") != "test-admin-token":
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        return True
+
+    app.dependency_overrides[require_admin] = admin_override
     return TestClient(app)
 
 
