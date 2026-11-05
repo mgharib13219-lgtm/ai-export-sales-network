@@ -192,6 +192,36 @@ def test_upgrade_request_is_idempotent_and_does_not_activate_plan(tmp_path, monk
                          headers={"x-admin-token": "test-admin-token"})
     assert pending.status_code == 200
     assert pending.json()[0]["user_id"] == supplier_id
+    approved = client.patch(
+        f"/marketplace/subscription/upgrade-requests/{first.json()['request_id']}",
+        headers={"x-admin-token": "test-admin-token"},
+        json={"decision": "approved", "duration_days": 45, "reviewer_note": "Company reviewed"}
+    )
+    assert approved.status_code == 200
+    assert approved.json()["status"] == "approved"
+    assert client.get("/marketplace/subscription/me", headers=headers).json()["plan_code"] == "growth"
+    duplicate_review = client.patch(
+        f"/marketplace/subscription/upgrade-requests/{first.json()['request_id']}",
+        headers={"x-admin-token": "test-admin-token"},
+        json={"decision": "rejected", "reviewer_note": "Second decision"}
+    )
+    assert duplicate_review.status_code == 409
+
+
+def test_admin_rejection_does_not_change_supplier_plan(tmp_path, monkeypatch):
+    client = _client(tmp_path, monkeypatch)
+    _, headers = _register(client, "rejectupgrade@example.com", "producer")
+    created = client.post("/marketplace/subscription/upgrade-requests", headers=headers,
+                          json={"plan_code": "starter", "note": "Please review"})
+    assert created.status_code == 200
+    rejected = client.patch(
+        f"/marketplace/subscription/upgrade-requests/{created.json()['request_id']}",
+        headers={"x-admin-token": "test-admin-token"},
+        json={"decision": "rejected", "reviewer_note": "More documents required"}
+    )
+    assert rejected.status_code == 200
+    assert rejected.json()["status"] == "rejected"
+    assert client.get("/marketplace/subscription/me", headers=headers).json()["plan_code"] == "free"
 
 
 def test_stripe_signature_rejects_tampering_and_accepts_valid_payload(monkeypatch):
