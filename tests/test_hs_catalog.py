@@ -15,6 +15,13 @@ def test_numeric_parent_code_is_padded_to_parent_level():
 def test_invalid_code_width_is_rejected():
     assert _normalize_code("123", "3") == ""
     assert _normalize_code("abc", "8") == ""
+    assert _normalize_code("123456", "4") == ""
+    assert _normalize_code("１２３４", "4") == ""
+
+
+def test_numeric_excel_values_can_be_normalized_without_losing_zeroes():
+    assert _normalize_code("101.0", "4") == "0101"
+    assert _normalize_code("0101.0", "4") == "0101"
 
 
 def test_hs_level_filter_only_accepts_hierarchy_widths():
