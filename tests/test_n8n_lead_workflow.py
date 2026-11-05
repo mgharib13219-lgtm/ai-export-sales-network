@@ -12,6 +12,8 @@ def test_n8n_lead_workflow_is_inactive_and_has_separate_channel_gates():
     workflow = json.loads(workflow_path.read_text(encoding="utf-8"))
 
     assert workflow["active"] is False
+    webhook = next(node for node in workflow["nodes"] if node["name"] == "Lead Intake Webhook")
+    assert webhook["parameters"]["authentication"] == "headerAuth"
     nodes = {node["name"]: node for node in workflow["nodes"]}
 
     validation = nodes["Validate lead evidence and contact basis"]["parameters"]["jsCode"]
