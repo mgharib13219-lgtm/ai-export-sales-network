@@ -120,7 +120,6 @@ def enforce_published_listing_limit(user_id: int):
         con.close()
 
 
-@router.get("/plans")
 def _stripe_price_id(plan_code: str) -> str:
     return str(getattr(settings, "stripe_price_id_" + plan_code, "") or "").strip()
 
@@ -129,6 +128,7 @@ def _stripe_price_display(plan_code: str) -> str:
     return str(getattr(settings, "stripe_price_display_" + plan_code, "") or "").strip()
 
 
+@router.get("/plans")
 def list_subscription_plans():
     plans = []
     for code, plan in PLANS.items():
