@@ -135,6 +135,30 @@ def test_monthly_agent_credits_are_reserved_atomically_and_enforced(tmp_path, mo
     assert exc.value.detail["code"] == "agent_monthly_credits_exhausted"
 
 
+def test_agent_credit_refund_uses_original_reservation_period(tmp_path, monkeypatch):
+    client = _client(tmp_path, monkeypatch)
+    supplier_id, _ = _register(client, "periodcredits@example.com", "producer")
+    assert _grant(client, supplier_id, "starter").status_code == 200
+
+    monkeypatch.setattr(subscriptions, "_period_key", lambda: "2026-11")
+    reservation = subscriptions.reserve_agent_credit(supplier_id)
+    assert reservation["period"] == "2026-11"
+    assert reservation["used"] == 1
+
+    # Simulate a slow provider call that fails just after the monthly boundary.
+    monkeypatch.setattr(subscriptions, "_period_key", lambda: "2026-12")
+    subscriptions.refund_agent_credit(supplier_id, period=reservation["period"])
+
+    con = subscriptions._con()
+    old_period = con.execute(
+        "SELECT credits_used FROM marketplace_agent_credit_usage WHERE user_id=? AND period=?",
+        (supplier_id, "2026-11")
+    ).fetchone()
+    con.close()
+    assert old_period["credits_used"] == 0
+    assert subscriptions.get_agent_credit_usage(supplier_id)["used"] == 0
+
+
 def test_buyer_discovery_saves_provenance_and_requires_manual_review(tmp_path, monkeypatch):
     client = _client(tmp_path, monkeypatch)
     supplier_id, headers = _register(client, "research@example.com", "producer")
