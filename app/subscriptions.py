@@ -82,7 +82,7 @@ def get_effective_subscription(user_id: int, con=None) -> dict:
     con = con or _con()
     try:
         now = datetime.now(timezone.utc).isoformat()
-        row = _execute(con, """SELECT plan_code,status,starts_at,ends_at FROM marketplace_subscriptions
+        row = _execute(con, """SELECT plan_code,status,starts_at,ends_at,granted_by FROM marketplace_subscriptions
             WHERE user_id=? AND status='active' AND starts_at<=? AND ends_at>?
             ORDER BY ends_at DESC,id DESC LIMIT 1""", (user_id, now, now)).fetchone()
         plan_code = row["plan_code"] if row and row["plan_code"] in PLANS else "free"
@@ -91,6 +91,7 @@ def get_effective_subscription(user_id: int, con=None) -> dict:
             "status": "active" if row else "free",
             "starts_at": row["starts_at"] if row else None,
             "ends_at": row["ends_at"] if row else None,
+            "billing_provider": row["granted_by"] if row else None,
             "entitlements": PLANS[plan_code],
         }
     finally:
@@ -325,7 +326,11 @@ def _stripe_subscription_snapshot(subscription_id: str, plan_code: str) -> dict:
     if response.status_code >= 400:
         raise HTTPException(502, "payment_provider_subscription_lookup_failed")
     subscription = response.json()
+    if str(subscription.get("id") or "") != str(subscription_id):
+        raise HTTPException(502, "payment_provider_subscription_identity_mismatch")
     items = ((subscription.get("items") or {}).get("data") or [])
+    if len(items) != 1:
+        raise HTTPException(400, "payment_subscription_item_count_invalid")
     price_id = (((items[0].get("price") or {}).get("id")) if items else None)
     if price_id != _stripe_price_id(plan_code):
         raise HTTPException(400, "payment_price_does_not_match_requested_plan")
@@ -494,3 +499,45 @@ async def stripe_webhook(request: Request):
     except (UnicodeDecodeError, json.JSONDecodeError):
         raise HTTPException(400, "invalid_payment_payload")
     return _apply_stripe_event(event)
+
+
+@router.post("/billing/portal")
+def create_billing_portal(user=Depends(_current_user)):
+    _require_role(user, "producer")
+    if not settings.stripe_secret_key:
+        raise HTTPException(503, "billing_not_configured")
+    if urlparse(settings.billing_success_url).scheme != "https":
+        raise HTTPException(503, "billing_return_url_must_use_https")
+    con = _con()
+    try:
+        row = _execute(con, """SELECT plan_code,external_reference FROM marketplace_subscriptions
+            WHERE user_id=? AND status='active' AND granted_by='stripe' AND ends_at>?
+            ORDER BY ends_at DESC,id DESC LIMIT 1""",
+            (user["id"], datetime.now(timezone.utc).isoformat())).fetchone()
+    finally:
+        con.close()
+    if not row or not row["external_reference"]:
+        raise HTTPException(409, detail={"code": "stripe_subscription_not_found",
+                                         "message": "برای این حساب اشتراک فعال Stripe پیدا نشد."})
+    snapshot = _stripe_subscription_snapshot(str(row["external_reference"]), str(row["plan_code"]))
+    customer = snapshot.get("customer")
+    if not customer:
+        raise HTTPException(409, "stripe_customer_reference_missing")
+    try:
+        response = httpx.post(
+            "https://api.stripe.com/v1/billing_portal/sessions",
+            data={"customer": customer, "return_url": settings.billing_success_url},
+            auth=(settings.stripe_secret_key, ""), timeout=20
+        )
+        if response.status_code >= 400:
+            raise HTTPException(502, "payment_provider_portal_failed")
+        session = response.json()
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(502, "payment_provider_unavailable")
+    portal_url = str(session.get("url") or "")
+    parsed = urlparse(portal_url)
+    if parsed.scheme != "https" or parsed.hostname != "billing.stripe.com":
+        raise HTTPException(502, "payment_provider_returned_invalid_portal_url")
+    return {"portal_url": portal_url}
