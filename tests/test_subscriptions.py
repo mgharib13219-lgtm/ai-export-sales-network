@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 import app.marketplace as marketplace
 import app.subscriptions as subscriptions
-from app.auth import require_admin
+from app.settings import settings
 
 
 def _client(tmp_path, monkeypatch):
@@ -21,13 +21,14 @@ def _client(tmp_path, monkeypatch):
     monkeypatch.setattr(subscriptions, "_con", connect)
     monkeypatch.setattr(marketplace, "add_audit_event", lambda *args, **kwargs: None)
     monkeypatch.setattr(subscriptions, "add_audit_event", lambda *args, **kwargs: None)
+    monkeypatch.setattr(settings, "environment", "production")
+    monkeypatch.setattr(settings, "admin_token", "test-admin-token")
     marketplace.init_marketplace()
     subscriptions.init_subscriptions()
 
     app = FastAPI()
     app.include_router(marketplace.router)
     app.include_router(subscriptions.router)
-    app.dependency_overrides[require_admin] = lambda: True
     return TestClient(app)
 
 
@@ -81,12 +82,13 @@ def test_operator_granted_plan_changes_quota_and_user_cannot_grant_self(tmp_path
     # Paid plans cannot be self-activated by a supplier.
     assert client.post(f"/marketplace/subscription/users/{user_id}", json={
         "plan_code": "starter", "duration_days": 30
-    }, headers=headers).status_code == 403
+    }, headers=headers).status_code == 401
 
+    admin_headers = {"x-admin-token": "test-admin-token"}
     grant = client.post(f"/marketplace/subscription/users/{user_id}", json={
         "plan_code": "starter", "duration_days": 30,
         "external_reference": "manual-review-ticket-123"
-    })
+    }, headers=admin_headers)
     assert grant.status_code == 200
     assert grant.json()["plan_code"] == "starter"
 
@@ -98,9 +100,10 @@ def test_operator_granted_plan_changes_quota_and_user_cannot_grant_self(tmp_path
 def test_subscription_revocation_returns_supplier_to_free_entitlement(tmp_path, monkeypatch):
     client = _client(tmp_path, monkeypatch)
     user_id, headers = _register(client)
+    admin_headers = {"x-admin-token": "test-admin-token"}
     client.post(f"/marketplace/subscription/users/{user_id}", json={
         "plan_code": "growth", "duration_days": 30
-    })
-    revoked = client.delete(f"/marketplace/subscription/users/{user_id}")
+    }, headers=admin_headers)
+    revoked = client.delete(f"/marketplace/subscription/users/{user_id}", headers=admin_headers)
     assert revoked.status_code == 200
     assert client.get("/marketplace/subscription/me", headers=headers).json()["plan_code"] == "free"
