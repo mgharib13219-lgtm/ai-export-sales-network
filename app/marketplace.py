@@ -301,6 +301,9 @@ def logout(authorization: Optional[str] = Header(default=None), user=Depends(_cu
 @router.post("/products")
 def create_product(data: ProductListing, user=Depends(_current_user)):
     _require_role(user, "producer")
+    # Enforce subscription limits at the API boundary; hiding a button in the UI is not security.
+    from app.subscriptions import enforce_published_listing_limit
+    enforce_published_listing_limit(user["id"])
     if any(len(value.strip()) < 2 for value in (data.name, data.category, data.origin)) or len(data.description.strip()) < 10:
         raise HTTPException(422, "product_fields_must_not_be_blank")
     con = _con()
