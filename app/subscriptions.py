@@ -82,7 +82,10 @@ def get_effective_subscription(user_id: int, con=None) -> dict:
 
 def enforce_published_listing_limit(user_id: int):
     """Raise 403 when the account has reached its server-side plan limit."""
-    con = _con()
+    # Use the marketplace's configured connection factory so all marketplace
+    # tables share the same database/transaction context (also supports test DBs).
+    from app.marketplace import _con as marketplace_connection
+    con = marketplace_connection()
     try:
         subscription = get_effective_subscription(user_id, con)
         limit = int(subscription["entitlements"]["published_listing_limit"])
