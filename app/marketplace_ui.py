@@ -136,7 +136,7 @@ async function loadSubscription(){
   box.append(card);
  });
 }
-async async function discoverBuyers(){
+async function discoverBuyers(){
  const terms=$('buyerterms').value.trim(),country=$('buyercountry').value.trim();
  if(!terms||!country){showMessage('buyerCandidates','نام محصول و کشور هدف را وارد کنید.');return;}
  $('discoverbuyers').disabled=true;showMessage('buyerCandidates','در حال جست‌وجو در منابع عمومی مجاز...');
