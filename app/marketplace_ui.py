@@ -136,7 +136,7 @@ async function loadSubscription(){
   box.append(card);
  });
 }
-async function discoverBuyers(){
+async async function discoverBuyers(){
  const terms=$('buyerterms').value.trim(),country=$('buyercountry').value.trim();
  if(!terms||!country){showMessage('buyerCandidates','نام محصول و کشور هدف را وارد کنید.');return;}
  $('discoverbuyers').disabled=true;showMessage('buyerCandidates','در حال جست‌وجو در منابع عمومی مجاز...');
@@ -189,7 +189,7 @@ async function loadSavedBuyerCandidates(){
  }catch(e){box.append(node('p','status','بارگذاری سرنخ‌های ذخیره‌شده ناموفق بود: '+e.message));}
 }
 
-function register(){
+async function register(){
  try{const data=await api('/marketplace/register',{method:'POST',body:JSON.stringify({email:$('email').value,company_name:$('company').value,country:$('country').value,role:$('role').value,password:$('password').value})});showMessage('authmsg',data.next_step);}
  catch(e){showMessage('authmsg',e.message);}
 }
