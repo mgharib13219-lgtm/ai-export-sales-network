@@ -22,6 +22,7 @@ from agents.repeat_deal import RepeatDealEngine
 from app.trade_workspace import router as trade_workspace_router, init_trade_workspace
 from app.hs_catalog import router as hs_catalog_router, init_hs_catalog
 from app.subscriptions import router as subscriptions_router, init_subscriptions
+from app.buyer_discovery import router as buyer_discovery_router, init_buyer_discovery
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -31,6 +32,7 @@ async def lifespan(app: FastAPI):
     init_trade_workspace()
     init_hs_catalog()
     init_subscriptions()
+    init_buyer_discovery()
     yield
 
 app = FastAPI(title=settings.app_name, version=settings.app_version, lifespan=lifespan)
@@ -40,6 +42,7 @@ app.include_router(agent_work_router)
 app.include_router(trade_workspace_router)
 app.include_router(hs_catalog_router)
 app.include_router(subscriptions_router)
+app.include_router(buyer_discovery_router)
 
 class Product(BaseModel):
     name: str = Field(min_length=2)
