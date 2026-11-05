@@ -25,9 +25,9 @@
 
 - `STRIPE_SECRET_KEY` و `STRIPE_WEBHOOK_SECRET`
 - شناسهٔ Price ماهانه و قیمت دقیق قابل‌نمایش برای هر پلن: `STRIPE_PRICE_ID_STARTER/GROWTH/PREMIUM` و `STRIPE_PRICE_DISPLAY_STARTER/GROWTH/PREMIUM`
-- دو نشانی بازگشت HTTPS: `BILLING_SUCCESS_URL` و `BILLING_CANCEL_URL`
+- نشانی‌های بازگشت HTTPS: `BILLING_SUCCESS_URL`، `BILLING_CANCEL_URL` و `BILLING_PORTAL_RETURN_URL`. برای Checkout می‌توان مسیر بازار را همراه با پارامتر `billing=success` و جای‌نگهدار `{CHECKOUT_SESSION_ID}` به‌عنوان نشانی موفقیت تنظیم کرد.
 
-در Stripe برای رویدادهای `checkout.session.completed`، `customer.subscription.updated`، `customer.subscription.deleted` و `invoice.payment_failed` وب‌هوک را به `/marketplace/subscription/billing/webhook` متصل کنید. اشتراک فقط پس از بررسی امضای وب‌هوک و تطبیق شناسهٔ Price فعال می‌شود. قیمت‌ها عمداً در کد حدس زده نشده‌اند و تا زمانی که مقدار و Price واقعی پیکربندی نشوند، خرید بسته می‌ماند.
+در Stripe برای رویدادهای `checkout.session.completed`، `customer.subscription.updated`، `customer.subscription.deleted` و `invoice.payment_failed` وب‌هوک را به `/marketplace/subscription/billing/webhook` متصل کنید. اشتراک فقط پس از بررسی امضای وب‌هوک و تطبیق شناسهٔ Price فعال می‌شود. قیمت‌ها عمداً در کد حدس زده نشده‌اند و تا زمانی که مقدار و Price واقعی پیکربندی نشوند، خرید بسته می‌ماند. مشترک فعال Stripe از پنل فروشنده می‌تواند با پرتال مشتری Stripe تمدید یا لغو اشتراک را مدیریت کند. بازگشت از Checkout به‌تنهایی نشانهٔ پرداخت نیست؛ پیام پنل تا دریافت وب‌هوک، این موضوع را صریح اعلام می‌کند.
 
 ## وضعیت این تغییرات
 
