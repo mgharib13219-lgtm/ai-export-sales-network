@@ -56,6 +56,12 @@ def init_marketplace():
     ]
     if _is_postgres():
         statements = [s.replace("id INTEGER PRIMARY KEY", "id BIGSERIAL PRIMARY KEY") for s in statements]
+    subscription_id_type = "BIGSERIAL PRIMARY KEY" if _is_postgres() else "INTEGER PRIMARY KEY"
+    statements.append(f"""CREATE TABLE IF NOT EXISTS marketplace_subscriptions (
+        id {subscription_id_type}, user_id INTEGER NOT NULL, plan_code TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'active', starts_at TEXT NOT NULL,
+        ends_at TEXT NOT NULL, granted_by TEXT NOT NULL,
+        external_reference TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
     statements.extend([
         "CREATE INDEX IF NOT EXISTS idx_marketplace_products_status_category ON marketplace_products(status,category)",
         "CREATE INDEX IF NOT EXISTS idx_marketplace_products_owner_status ON marketplace_products(owner_id,status)",
@@ -64,6 +70,7 @@ def init_marketplace():
         "CREATE INDEX IF NOT EXISTS idx_marketplace_sessions_user_expiry ON marketplace_sessions(user_id,expires_at)",
         "CREATE INDEX IF NOT EXISTS idx_marketplace_reviews_subject_created ON marketplace_reviews(subject_user_id,created_at)",
         "CREATE INDEX IF NOT EXISTS idx_marketplace_verifications_user_status ON marketplace_verifications(user_id,status)",
+        "CREATE INDEX IF NOT EXISTS idx_marketplace_subscriptions_user_status ON marketplace_subscriptions(user_id,status,ends_at)",
     ])
     for statement in statements:
         _execute(con, statement)
@@ -73,9 +80,6 @@ def init_marketplace():
              ((datetime.now(timezone.utc) - timedelta(days=1)).isoformat(), now))
     con.commit()
     con.close()
-    # Keep standalone marketplace initialization safe for tests and non-ASGI workers.
-    from app.subscriptions import init_subscriptions
-    init_subscriptions()
 
 
 def _id_insert(con, sql, values):
