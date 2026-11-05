@@ -35,7 +35,7 @@ button.secondary{background:#eef2f6;color:#182230;border:1px solid #d7dde5}
 <section id="account-settings" hidden><h2>امنیت حساب</h2><div class="grid"><input id="currentpass" type="password" placeholder="گذرواژه فعلی"><input id="newpass" type="password" placeholder="گذرواژه جدید (حداقل ۱۲ نویسه)"></div><button id="changepass">تغییر گذرواژه و خروج از همه دستگاه‌ها</button><p id="passwordmsg" class="status"></p></section>
 <section id="subscription" hidden><h2>پلن و امکانات حساب</h2><p id="subscriptionstate" class="status">در حال بارگذاری...</p><div id="plans" class="grid"></div><p id="upgradeMessage" class="status" aria-live="polite"></p>
 <h2>جست‌وجوی خریدار با ایجنت</h2><p class="muted">جست‌وجو فقط در نتایج عمومی موتور جست‌وجو انجام می‌شود. هیچ وب‌سایتی خزش نمی‌شود، اطلاعات تماس برداشت نمی‌شود و پیامی ارسال نمی‌شود. هر نتیجه باید پیش از تماس از نظر ارتباط، شرایط سایت و قوانین حریم خصوصی و بازاریابی بررسی شود.</p>
-<div class="grid"><input id="buyerterms" placeholder="محصول یا کلمه کلیدی، مثلاً قطعات پمپ صنعتی"><input id="buyercountry" placeholder="کشور هدف، مثلاً آلمان"><button id="discoverbuyers">جست‌وجوی خریداران</button></div><p id="agentcredits" class="status"></p><div id="buyerCandidates"></div></section>
+<div class="grid"><input id="buyerterms" placeholder="محصول یا کلمه کلیدی، مثلاً قطعات پمپ صنعتی"><input id="buyercountry" placeholder="کشور هدف، مثلاً آلمان"><button id="discoverbuyers">جست‌وجوی خریداران</button></div><p id="agentcredits" class="status"></p><button id="refreshBuyerCandidates" class="secondary" type="button">نمایش سرنخ‌های ذخیره‌شده</button><div id="buyerCandidates" aria-live="polite"></div></section>
 <section><h2>فهرست جامع تعرفه‌های گمرکی ایران (HS)</h2>
 <p class="muted">جست‌وجو بر اساس کد تعرفه یا شرح فارسی/انگلیسی؛ نمایش فقط ردیف‌هایی که از منبع رسمی/مستند وارد شده‌اند.</p>
 <div class="grid"><input id="hscodeq" placeholder="کد تعرفه یا نام کالا"><select id="hslevel"><option value="">همه سطوح</option><option value="2">۲ رقمی</option><option value="4">۴ رقمی</option><option value="6">۶ رقمی</option><option value="8">۸ رقمی</option></select><button id="hscodebtn">جست‌وجوی تعرفه</button></div>
@@ -157,6 +157,38 @@ async function discoverBuyers(){
  finally{$('discoverbuyers').disabled=false;}
 }
 
+
+async function loadSavedBuyerCandidates(){
+ const box=$('buyerCandidates');
+ box.replaceChildren();
+ try{
+  const items=await api('/marketplace/agent/buyer-candidates?limit=100');
+  if(!items.length){box.append(node('p','muted','هنوز سرنخ ذخیره‌شده‌ای ندارید. یک جست‌وجوی جدید انجام دهید.'));return;}
+  items.forEach(item=>{
+   const card=node('article','card');
+   card.append(node('h3','',item.title),node('p','',item.snippet||'خلاصه‌ای از منبع ارائه نشده است.'));
+   card.append(node('p','muted','وضعیت: '+({needs_supplier_review:'نیازمند بررسی شما',supplier_marked_relevant:'مرتبط علامت‌گذاری شده',rejected:'نامرتبط'}[item.review_status]||item.review_status)+' · کشور هدف: '+item.target_country+' · منبع: '+item.source_provider));
+   const link=node('a','', 'بازکردن منبع عمومی');link.href=item.source_url;link.target='_blank';link.rel='noopener noreferrer';card.append(link);
+   if(item.review_status==='needs_supplier_review'){
+    const relevant=node('button','secondary','مرتبط است');
+    relevant.addEventListener('click',async()=>{
+     relevant.disabled=true;
+     try{await api('/marketplace/agent/buyer-candidates/'+item.id,{method:'PATCH',body:JSON.stringify({relevant:true,note:'Reviewed by supplier'})});await loadSavedBuyerCandidates();}
+     catch(e){relevant.disabled=false;card.append(node('p','status',e.message));}
+    });
+    const reject=node('button','secondary','نامرتبط');
+    reject.addEventListener('click',async()=>{
+     reject.disabled=true;
+     try{await api('/marketplace/agent/buyer-candidates/'+item.id,{method:'PATCH',body:JSON.stringify({relevant:false,note:'Not relevant'})});await loadSavedBuyerCandidates();}
+     catch(e){reject.disabled=false;card.append(node('p','status',e.message));}
+    });
+    card.append(relevant,reject);
+   }
+   box.append(card);
+  });
+ }catch(e){box.append(node('p','status','بارگذاری سرنخ‌های ذخیره‌شده ناموفق بود: '+e.message));}
+}
+
 function register(){
  try{const data=await api('/marketplace/register',{method:'POST',body:JSON.stringify({email:$('email').value,company_name:$('company').value,country:$('country').value,role:$('role').value,password:$('password').value})});showMessage('authmsg',data.next_step);}
  catch(e){showMessage('authmsg',e.message);}
@@ -175,6 +207,7 @@ function renderAccount(){
   if(billingState==='success')showMessage('upgradeMessage','از صفحهٔ پرداخت برگشته‌اید؛ پلن فقط پس از تأیید امن وب‌هوک به‌روزرسانی می‌شود.');
   else if(billingState==='cancel')showMessage('upgradeMessage','پرداخت لغو شد؛ پلن فعلی شما بدون تغییر باقی ماند.');
   loadSubscription().catch(e=>showMessage('subscriptionstate',e.message));
+  loadSavedBuyerCandidates();
  }
 }
 async function changePassword(){
@@ -220,6 +253,7 @@ $('hscodebtn').addEventListener('click',()=>loadHsCatalog().catch(e=>showMessage
 $('hscodeq').addEventListener('keydown',e=>{if(e.key==='Enter')loadHsCatalog().catch(err=>showMessage('hscatalog',err.message));});
 $('loadrequests').addEventListener('click',loadRequests);
 $('discoverbuyers').addEventListener('click',discoverBuyers);
+$('refreshBuyerCandidates').addEventListener('click',loadSavedBuyerCandidates);
 $('logout').addEventListener('click',async()=>{try{await api('/marketplace/logout',{method:'POST'});}catch{}sessionStorage.removeItem('market_token');user=null;renderAccount();});
 loadProducts().catch(e=>showMessage('products',e.message));
 if(token())api('/marketplace/me').then(data=>{user=data;renderAccount();}).catch(()=>{sessionStorage.removeItem('market_token');renderAccount();});
