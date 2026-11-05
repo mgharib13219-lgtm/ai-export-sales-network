@@ -203,3 +203,50 @@ def test_checkout_is_closed_when_provider_and_transparent_price_are_not_configur
                            headers=headers)
     assert response.status_code == 503
     assert response.json()["detail"]["code"] == "billing_not_configured"
+
+
+def test_signed_stripe_checkout_webhook_activates_subscription_once(tmp_path, monkeypatch):
+    client = _client(tmp_path, monkeypatch)
+    user_id, headers = _register(client, "paid@example.com", "producer")
+    secret = "whsec_checkout_test"
+    monkeypatch.setattr(subscriptions, "settings", SimpleNamespace(stripe_webhook_secret=secret))
+    future = (subscriptions.datetime.now(subscriptions.timezone.utc) +
+              subscriptions.timedelta(days=30)).isoformat()
+    monkeypatch.setattr(subscriptions, "_stripe_subscription_snapshot", lambda sub_id, plan: {
+        "id": sub_id, "status": "active", "ends_at": future, "customer": "cus_test"
+    })
+    event = {
+        "id": "evt_checkout_test_001", "type": "checkout.session.completed",
+        "data": {"object": {
+            "id": "cs_test", "client_reference_id": str(user_id),
+            "metadata": {"user_id": str(user_id), "plan_code": "starter"},
+            "mode": "subscription", "payment_status": "paid", "subscription": "sub_test_001"
+        }}
+    }
+    payload = json.dumps(event, separators=(",", ":")).encode()
+    timestamp = int(time.time())
+    signed = str(timestamp).encode() + b"." + payload
+    digest = hmac.new(secret.encode(), signed, hashlib.sha256).hexdigest()
+    headers_sig = {"stripe-signature": f"t={timestamp},v1={digest}"}
+    first = client.post("/marketplace/subscription/billing/webhook", content=payload,
+                        headers=headers_sig)
+    assert first.status_code == 200
+    assert first.json()["activated"] is True
+    current = client.get("/marketplace/subscription/me", headers=headers)
+    assert current.status_code == 200
+    assert current.json()["plan_code"] == "starter"
+    assert current.json()["billing_provider"] == "stripe"
+    duplicate = client.post("/marketplace/subscription/billing/webhook", content=payload,
+                            headers=headers_sig)
+    assert duplicate.status_code == 200
+    assert duplicate.json()["duplicate"] is True
+
+
+def test_stripe_billing_portal_requires_a_stripe_subscription(tmp_path, monkeypatch):
+    client = _client(tmp_path, monkeypatch)
+    _, headers = _register(client, "manualgrant@example.com", "producer")
+    monkeypatch.setattr(subscriptions, "settings", SimpleNamespace(
+        stripe_secret_key="sk_test", billing_success_url="https://app.example/billing/return"))
+    response = client.post("/marketplace/subscription/billing/portal", headers=headers)
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "stripe_subscription_not_found"
