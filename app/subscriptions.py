@@ -66,8 +66,8 @@ def init_subscriptions():
     _execute(con, """CREATE TABLE IF NOT EXISTS marketplace_agent_credit_usage (
         user_id INTEGER NOT NULL, period TEXT NOT NULL, credits_used INTEGER NOT NULL DEFAULT 0,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(user_id,period))""")
-    _execute(con, """CREATE TABLE IF NOT EXISTS marketplace_upgrade_requests (
-        id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, plan_code TEXT NOT NULL,
+    _execute(con, f"""CREATE TABLE IF NOT EXISTS marketplace_upgrade_requests (
+        id {id_type}, user_id INTEGER NOT NULL, plan_code TEXT NOT NULL,
         status TEXT NOT NULL DEFAULT 'pending', note TEXT NOT NULL DEFAULT '',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, reviewed_at TIMESTAMP)""")
     _execute(con, """CREATE TABLE IF NOT EXISTS marketplace_billing_events (
