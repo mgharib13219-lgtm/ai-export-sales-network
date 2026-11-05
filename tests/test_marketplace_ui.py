@@ -27,8 +27,6 @@ def test_public_marketplace_page_is_available_and_has_safe_dom_rendering():
     # the entire inline script before any marketplace control can run.
     assert "async function register()" in response.text
     assert "async function discoverBuyers()" in response.text
-    assert "function register()" not in response.text
-    assert "function discoverBuyers()" not in response.text
 
 
 
