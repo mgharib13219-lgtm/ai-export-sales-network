@@ -83,10 +83,24 @@ def test_lead_details_are_plan_gated_and_contact_requires_buyer_opt_in(tmp_path,
     assert "specification" not in free_view[0]
     assert "buyer_email" not in free_view[0]
 
+    product = client.post("/marketplace/products", headers=supplier_headers, json={
+        "name": "Industrial pump", "category": "machinery",
+        "description": "High pressure stainless steel pump with ATEX documentation",
+        "origin": "Germany", "capacity": "100 units monthly", "moq": "10 units"
+    })
+    assert product.status_code == 200
+    request_id = buyer_request.json()["request_id"]
+    free_matches = client.get(f"/marketplace/matches/requests/{request_id}",
+                              headers=supplier_headers).json()["matches"]
+    assert free_matches[0]["score"] < 100
+
     assert _grant(client, supplier_id, "growth").status_code == 200
     growth_view = client.get("/marketplace/requests", headers=supplier_headers).json()
     assert "ATEX documentation" in growth_view[0]["specification"]
     assert "buyer_email" not in growth_view[0]
+    growth_matches = client.get(f"/marketplace/matches/requests/{request_id}",
+                                headers=supplier_headers).json()["matches"]
+    assert growth_matches[0]["score"] > free_matches[0]["score"]
 
     assert _grant(client, supplier_id, "premium").status_code == 200
     premium_view = client.get("/marketplace/requests", headers=supplier_headers).json()
