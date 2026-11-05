@@ -440,8 +440,12 @@ def list_requests(category: Optional[str] = Query(default=None, max_length=120),
                   limit: int = Query(default=50, ge=1, le=100), user=Depends(_current_user)):
     _require_role(user, "producer")
     from app.subscriptions import get_effective_subscription
-    plan_code = get_effective_subscription(user["id"])["plan_code"]
-    clauses, values = ["r.status='open'"], []
+    # Reuse the marketplace database connection so test adapters and all
+    # marketplace tables share one configured connection factory.
+    con = _con()
+    try:
+        plan_code = get_effective_subscription(user["id"], con=con)["plan_code"]
+        clauses, values = ["r.status='open'"], []
     if category:
         clauses.append("LOWER(r.category)=?")
         values.append(category.lower())
@@ -464,9 +468,9 @@ def list_requests(category: Optional[str] = Query(default=None, max_length=120),
             CASE WHEN r.share_contact=1 THEN u.country ELSE NULL END AS buyer_country,
             CASE WHEN r.share_contact=1 THEN u.email ELSE NULL END AS buyer_email
             FROM marketplace_requests r JOIN marketplace_users u ON u.id=r.buyer_id""" + where + " ORDER BY r.id DESC LIMIT ?"
-    con = _con()
-    rows = _execute(con, sql, values + [max(1, min(limit, 100))]).fetchall()
-    con.close()
+        rows = _execute(con, sql, values + [max(1, min(limit, 100))]).fetchall()
+    finally:
+        con.close()
     return {"plan_code": plan_code, "access_level": {
                 "free": "public_summary", "starter": "limited_preview",
                 "growth": "full_specification", "premium": "full_specification_and_buyer_opt_in"
