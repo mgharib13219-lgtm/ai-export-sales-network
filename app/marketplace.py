@@ -73,6 +73,9 @@ def init_marketplace():
              ((datetime.now(timezone.utc) - timedelta(days=1)).isoformat(), now))
     con.commit()
     con.close()
+    # Keep standalone marketplace initialization safe for tests and non-ASGI workers.
+    from app.subscriptions import init_subscriptions
+    init_subscriptions()
 
 
 def _id_insert(con, sql, values):
