@@ -581,19 +581,36 @@ def profile_reviews(user_id: int):
 
 @router.get("/matches/requests/{request_id}")
 def match_request_to_products(request_id: int, user=Depends(_current_user)):
-    """Return explainable discovery candidates; never represents a match as verified."""
+    """Return discovery candidates using only the request detail level allowed by the supplier's plan."""
     _require_role(user, "producer")
+    from app.subscriptions import get_effective_subscription
     con = _con()
-    request_row = _execute(con, "SELECT * FROM marketplace_requests WHERE id=? AND status='open'",
-                           (request_id,)).fetchone()
-    if not request_row:
+    try:
+        plan_code = get_effective_subscription(user["id"], con=con)["plan_code"]
+        if plan_code == "free":
+            request_sql = """SELECT id,title,category,destination,quantity
+                FROM marketplace_requests WHERE id=? AND status='open'"""
+            match_limit = 5
+        elif plan_code == "starter":
+            request_sql = """SELECT id,title,category,SUBSTR(specification,1,220) AS specification,
+                destination,quantity FROM marketplace_requests WHERE id=? AND status='open'"""
+            match_limit = 10
+        else:
+            request_sql = """SELECT id,title,category,specification,destination,quantity
+                FROM marketplace_requests WHERE id=? AND status='open'"""
+            match_limit = 25
+        request_row = _execute(con, request_sql, (request_id,)).fetchone()
+        if not request_row:
+            raise HTTPException(404, "open_buy_request_not_found")
+        listings = _execute(con, """SELECT p.id,p.name,p.category,p.description,p.origin,p.capacity,p.moq,
+            p.target_markets,u.company_name,u.country
+            FROM marketplace_products p JOIN marketplace_users u ON u.id=p.owner_id
+            WHERE p.status='published' ORDER BY p.id DESC LIMIT 500""").fetchall()
+    finally:
         con.close()
-        raise HTTPException(404, "open_buy_request_not_found")
-    listings = _execute(con, """SELECT p.id,p.name,p.category,p.description,p.origin,p.capacity,p.moq,
-        p.target_markets,u.company_name,u.country
-        FROM marketplace_products p JOIN marketplace_users u ON u.id=p.owner_id
-        WHERE p.status='published' ORDER BY p.id DESC LIMIT 500""").fetchall()
-    con.close()
-    matches = rank_listings_for_request(dict(request_row), [dict(row) for row in listings])
+    matches = rank_listings_for_request(dict(request_row), [dict(row) for row in listings],
+                                        limit=match_limit)
     return {"request_id": request_id, "matches": matches,
+            "access_level": {"free": "public_summary", "starter": "limited_preview",
+                             "growth": "full_specification", "premium": "full_specification"}[plan_code],
             "note": "Discovery ranking only. Identity, product claims, certificates and destination compliance remain unverified."}
