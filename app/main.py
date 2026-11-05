@@ -24,6 +24,7 @@ from agents.repeat_deal import RepeatDealEngine
 from app.trade_workspace import router as trade_workspace_router, init_trade_workspace
 from app.trade_workspace_ui import router as trade_workspace_ui_router
 from app.hs_catalog import router as hs_catalog_router, init_hs_catalog
+from app.hs_catalog_ui import router as hs_catalog_ui_router
 from app.subscriptions import router as subscriptions_router, init_subscriptions
 from app.buyer_discovery import router as buyer_discovery_router, init_buyer_discovery
 
@@ -47,6 +48,7 @@ app.include_router(agent_work_router)
 app.include_router(trade_workspace_router)
 app.include_router(trade_workspace_ui_router)
 app.include_router(hs_catalog_router)
+app.include_router(hs_catalog_ui_router)
 app.include_router(subscriptions_router)
 app.include_router(buyer_discovery_router)
 
