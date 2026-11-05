@@ -18,6 +18,7 @@ def test_public_marketplace_page_is_available_and_has_safe_dom_rendering():
     assert response.headers["x-frame-options"] == "DENY"
     assert response.headers["cache-control"] == "no-store"
     assert "بازار تجارت جهانی" in response.text
+    assert "href=\"/trade/workspace\"" in response.text
     assert "textContent" in response.text
     assert "innerHTML" not in response.text
     assert "sessionStorage" in response.text
