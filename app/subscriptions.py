@@ -506,8 +506,8 @@ def create_billing_portal(user=Depends(_current_user)):
     _require_role(user, "producer")
     if not settings.stripe_secret_key:
         raise HTTPException(503, "billing_not_configured")
-    if urlparse(settings.billing_success_url).scheme != "https":
-        raise HTTPException(503, "billing_return_url_must_use_https")
+    if urlparse(settings.billing_portal_return_url).scheme != "https":
+        raise HTTPException(503, "billing_portal_return_url_must_use_https")
     con = _con()
     try:
         row = _execute(con, """SELECT plan_code,external_reference FROM marketplace_subscriptions
@@ -526,7 +526,7 @@ def create_billing_portal(user=Depends(_current_user)):
     try:
         response = httpx.post(
             "https://api.stripe.com/v1/billing_portal/sessions",
-            data={"customer": customer, "return_url": settings.billing_success_url},
+            data={"customer": customer, "return_url": settings.billing_portal_return_url},
             auth=(settings.stripe_secret_key, ""), timeout=20
         )
         if response.status_code >= 400:
