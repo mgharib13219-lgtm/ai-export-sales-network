@@ -119,3 +119,32 @@ def test_starter_catalog_is_reference_only_and_has_no_stock_or_price(tmp_path, m
     assert len(items) == 6
     assert all(item["hs_code"] == "080620" for item in items)
     assert all("quantity" not in item and "unit_price" not in item for item in items)
+
+def test_trade_workspace_page_and_script():
+    import re
+    import shutil
+    import subprocess
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from app.trade_workspace_ui import router as ui_router
+
+    app = FastAPI()
+    app.include_router(ui_router)
+    response = TestClient(app).get("/trade/workspace")
+    assert response.status_code == 200
+    assert 'id="inventory"' in response.text and 'id="pricing"' in response.text
+    assert "/trade/inventory" in response.text and "/trade/price-lists" in response.text
+    assert "innerHTML" not in response.text
+    assert response.headers["x-frame-options"] == "DENY"
+    if shutil.which("node"):
+        scripts = re.findall(r"<script[^>]*>(.*?)</script>", response.text, re.DOTALL)
+        assert scripts
+        for script in scripts:
+            result = subprocess.run(["node", "--check"], input=script, text=True,
+                                    capture_output=True, timeout=15)
+            assert result.returncode == 0, result.stderr
+
+
+def test_trade_workspace_is_registered_in_main_app():
+    from app.main import app
+    assert any(route.path == "/trade/workspace" for route in app.routes)
