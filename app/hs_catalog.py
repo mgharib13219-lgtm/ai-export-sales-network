@@ -83,10 +83,10 @@ def _prepare_csv_rows(text, source, source_version, imported_at):
         row_source = _pick(row, SOURCE_KEYS) or source
         if not raw_code and not fa:
             continue
-        if not code:
-            raise ValueError(f"invalid_hs_code_at_line_{line_no}")
         if not fa:
             raise ValueError(f"missing_persian_description_at_line_{line_no}")
+        if not code:
+            raise ValueError(f"invalid_hs_code_at_line_{line_no}")
         expected_parent = code[:-2] if len(code) > 2 else None
         parent = None
         if raw_parent:
