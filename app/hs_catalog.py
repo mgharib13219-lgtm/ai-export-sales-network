@@ -68,7 +68,7 @@ def _normalize_code(value, digits=None):
 
 def _prepare_csv_rows(text, source, source_version, imported_at):
     """Validate the entire CSV before opening a database transaction."""
-    reader = csv.DictReader(io.StringIO(text.lstrip("\\ufeff")))
+    reader = csv.DictReader(io.StringIO(text.lstrip("\ufeff")))
     if not reader.fieldnames:
         raise ValueError("missing_csv_header")
     prepared = []
