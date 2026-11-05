@@ -201,10 +201,12 @@ def _period_key(now=None):
     return now.strftime("%Y-%m")
 
 
-def get_agent_credit_usage(user_id: int) -> dict:
+def get_agent_credit_usage(user_id: int, period: Optional[str] = None) -> dict:
     sub = get_effective_subscription(user_id)
     limit = int(sub["entitlements"]["agent_sourcing_credits"])
-    period = _period_key()
+    # Keep accounting tied to the reservation's original billing period, even
+    # when a provider call crosses a calendar-month boundary.
+    period = period or _period_key()
     con = _con()
     row = _execute(con, "SELECT credits_used FROM marketplace_agent_credit_usage WHERE user_id=? AND period=?",
                    (user_id, period)).fetchone()
@@ -237,11 +239,13 @@ def reserve_agent_credit(user_id: int) -> dict:
         con.commit()
     finally:
         con.close()
-    return get_agent_credit_usage(user_id)
+    return get_agent_credit_usage(user_id, period=period)
 
 
-def refund_agent_credit(user_id: int):
-    period = _period_key()
+def refund_agent_credit(user_id: int, period: Optional[str] = None):
+    # Callers should pass the period returned by reserve_agent_credit(); the
+    # fallback preserves compatibility for older internal callers.
+    period = period or _period_key()
     con = _con()
     _execute(con, """UPDATE marketplace_agent_credit_usage
         SET credits_used=CASE WHEN credits_used>0 THEN credits_used-1 ELSE 0 END,
