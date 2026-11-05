@@ -446,28 +446,28 @@ def list_requests(category: Optional[str] = Query(default=None, max_length=120),
     try:
         plan_code = get_effective_subscription(user["id"], con=con)["plan_code"]
         clauses, values = ["r.status='open'"], []
-    if category:
-        clauses.append("LOWER(r.category)=?")
-        values.append(category.lower())
-    where = " WHERE " + " AND ".join(clauses)
-    if plan_code == "free":
-        # Free accounts see only a public summary, never the buyer's specification or identity.
-        sql = """SELECT r.id,r.title,r.category,r.destination,r.status,r.created_at
-            FROM marketplace_requests r""" + where + " ORDER BY r.id DESC LIMIT ?"
-    elif plan_code == "starter":
-        sql = """SELECT r.id,r.title,r.category,SUBSTR(r.specification,1,220) AS specification_preview,
-            r.destination,r.quantity,r.status,r.created_at
-            FROM marketplace_requests r""" + where + " ORDER BY r.id DESC LIMIT ?"
-    elif plan_code == "growth":
-        sql = """SELECT r.id,r.title,r.category,r.specification,r.destination,r.quantity,r.status,r.created_at
-            FROM marketplace_requests r""" + where + " ORDER BY r.id DESC LIMIT ?"
-    else:
-        # Premium contact disclosure is still gated by the buyer's separate opt-in.
-        sql = """SELECT r.id,r.title,r.category,r.specification,r.destination,r.quantity,r.status,r.created_at,
-            CASE WHEN r.share_contact=1 THEN u.company_name ELSE NULL END AS buyer_company,
-            CASE WHEN r.share_contact=1 THEN u.country ELSE NULL END AS buyer_country,
-            CASE WHEN r.share_contact=1 THEN u.email ELSE NULL END AS buyer_email
-            FROM marketplace_requests r JOIN marketplace_users u ON u.id=r.buyer_id""" + where + " ORDER BY r.id DESC LIMIT ?"
+        if category:
+            clauses.append("LOWER(r.category)=?")
+            values.append(category.lower())
+        where = " WHERE " + " AND ".join(clauses)
+        if plan_code == "free":
+            # Free accounts see only a public summary, never the buyer's specification or identity.
+            sql = """SELECT r.id,r.title,r.category,r.destination,r.status,r.created_at
+                FROM marketplace_requests r""" + where + " ORDER BY r.id DESC LIMIT ?"
+        elif plan_code == "starter":
+            sql = """SELECT r.id,r.title,r.category,SUBSTR(r.specification,1,220) AS specification_preview,
+                r.destination,r.quantity,r.status,r.created_at
+                FROM marketplace_requests r""" + where + " ORDER BY r.id DESC LIMIT ?"
+        elif plan_code == "growth":
+            sql = """SELECT r.id,r.title,r.category,r.specification,r.destination,r.quantity,r.status,r.created_at
+                FROM marketplace_requests r""" + where + " ORDER BY r.id DESC LIMIT ?"
+        else:
+            # Premium contact disclosure is still gated by the buyer's separate opt-in.
+            sql = """SELECT r.id,r.title,r.category,r.specification,r.destination,r.quantity,r.status,r.created_at,
+                CASE WHEN r.share_contact=1 THEN u.company_name ELSE NULL END AS buyer_company,
+                CASE WHEN r.share_contact=1 THEN u.country ELSE NULL END AS buyer_country,
+                CASE WHEN r.share_contact=1 THEN u.email ELSE NULL END AS buyer_email
+                FROM marketplace_requests r JOIN marketplace_users u ON u.id=r.buyer_id""" + where + " ORDER BY r.id DESC LIMIT ?"
         rows = _execute(con, sql, values + [max(1, min(limit, 100))]).fetchall()
     finally:
         con.close()
