@@ -64,11 +64,12 @@ def discover_buyers(data: BuyerDiscoverySearch, user=Depends(_current_user)):
     country = " ".join(data.target_country.split())
     buyer_type = " ".join(data.buyer_type.split())
     query = f"{product_terms} {buyer_type} in {country}"
-    reserve_agent_credit(user["id"])
+    reservation = reserve_agent_credit(user["id"])
+    reservation_period = reservation["period"]
     try:
         raw_results = search_provider.search_buyers(query, country)
     except Exception:
-        refund_agent_credit(user["id"])
+        refund_agent_credit(user["id"], period=reservation_period)
         raise HTTPException(502, "buyer_search_provider_failed")
     now = datetime.now(timezone.utc)
     retention = (now + timedelta(days=90)).isoformat()
@@ -97,7 +98,7 @@ def discover_buyers(data: BuyerDiscoverySearch, user=Depends(_current_user)):
         con.commit()
     except Exception:
         con.rollback()
-        refund_agent_credit(user["id"])
+        refund_agent_credit(user["id"], period=reservation_period)
         raise
     finally:
         con.close()
