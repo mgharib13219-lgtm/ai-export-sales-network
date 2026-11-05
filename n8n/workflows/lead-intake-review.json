@@ -1,0 +1,73 @@
+{
+  "name": "B2B Lead Intake and Approved Outreach",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-intake-review",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "lead-webhook",
+      "name": "Lead Intake Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-600, 0],
+      "webhookId": "lead-intake-review"
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $input.first().json.body ?? $input.first().json;\\nconst required = ['company_name','source_url','contact_basis'];\\nconst missing = required.filter(k => !String(lead[k] ?? '').trim());\\nconst urlOk = /^https?:\\\\/\\\\//i.test(String(lead.source_url ?? ''));\\nconst approved = lead.outreach_approved === true && lead.opt_in === true;\\nif (missing.length || !urlOk || !approved) return [];\\nreturn [{json:{...lead, company_name:String(lead.company_name).trim().slice(0,240), contact_email:String(lead.contact_email ?? '').trim().slice(0,254), telegram_chat_id:String(lead.telegram_chat_id ?? '').trim().slice(0,100), product_or_order_signal:String(lead.product_or_order_signal ?? '').trim().slice(0,1000), source_url:String(lead.source_url).trim().slice(0,2000)}}];"
+      },
+      "id": "lead-validate-approval",
+      "name": "Validate evidence and opt-in / approval",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-360, 0]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "create",
+        "toRecipients": "={{$json.contact_email}}",
+        "subject": "={{'Business inquiry: ' + $json.product_or_order_signal}}",
+        "message": "={{$json.message || ('Hello, we found your business signal: ' + $json.product_or_order_signal + '. Source: ' + $json.source_url + '. If this is not relevant, no follow-up will be sent.')}}",
+        "options": {}
+      },
+      "id": "gmail-draft",
+      "name": "Create Gmail draft for human review",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [0, -120]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{$json.telegram_chat_id}}",
+        "text": "={{$json.message || ('Business lead: ' + $json.company_name + '\\\\nSignal: ' + $json.product_or_order_signal + '\\\\nSource: ' + $json.source_url)}}"
+      },
+      "id": "telegram-approved",
+      "name": "Send approved Telegram message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [0, 120]
+    }
+  ],
+  "connections": {
+    "Lead Intake Webhook": {
+      "main": [[{"node": "Validate evidence and opt-in / approval", "type": "main", "index": 0}]]
+    },
+    "Validate evidence and opt-in / approval": {
+      "main": [[
+        {"node": "Create Gmail draft for human review", "type": "main", "index": 0},
+        {"node": "Send approved Telegram message", "type": "main", "index": 0}
+      ]]
+    }
+  },
+  "active": false,
+  "settings": {"executionOrder": "v1"},
+  "versionId": "template-v1",
+  "meta": {"templateCredsSetupCompleted": false},
+  "tags": ["lead-discovery", "human-review", "compliance"]
+}
