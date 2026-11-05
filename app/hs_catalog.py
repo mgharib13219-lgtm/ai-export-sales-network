@@ -66,6 +66,43 @@ def _normalize_code(value, digits=None):
     return raw.zfill(width)
 
 
+def _prepare_csv_rows(text, source, source_version, imported_at):
+    """Validate the entire CSV before opening a database transaction."""
+    reader = csv.DictReader(io.StringIO(text))
+    if not reader.fieldnames:
+        raise ValueError("missing_csv_header")
+    prepared = []
+    seen = set()
+    for line_no, row in enumerate(reader, start=2):
+        raw_code = re.sub(r"\s+", "", _pick(row, CODE_KEYS))
+        digits = _pick(row, DIGITS_KEYS)
+        code = _normalize_code(raw_code, digits or None)
+        fa = _pick(row, FA_KEYS)
+        en = _pick(row, EN_KEYS)
+        raw_parent = _pick(row, PARENT_KEYS)
+        row_source = _pick(row, SOURCE_KEYS) or source
+        if not raw_code and not fa:
+            continue
+        if not code:
+            raise ValueError(f"invalid_hs_code_at_line_{line_no}")
+        if not fa:
+            raise ValueError(f"missing_persian_description_at_line_{line_no}")
+        expected_parent = code[:-2] if len(code) > 2 else None
+        parent = None
+        if raw_parent:
+            parent = _normalize_code(raw_parent, len(code) - 2 if len(code) > 2 else None)
+            if not expected_parent or parent != expected_parent:
+                raise ValueError(f"invalid_parent_code_at_line_{line_no}")
+        if code in seen:
+            raise ValueError(f"duplicate_hs_code_at_line_{line_no}")
+        seen.add(code)
+        prepared.append((code, fa[:1000], en[:1000], parent or expected_parent,
+                         row_source[:300], source_version, imported_at, 1))
+    if not prepared:
+        raise ValueError("no_valid_rows_found")
+    return prepared
+
+
 @router.post("/import-csv", dependencies=[Depends(require_admin)])
 async def import_hs_csv(request: Request,
                         source: str = Query(min_length=3, max_length=300),
@@ -76,39 +113,8 @@ async def import_hs_csv(request: Request,
         raise HTTPException(413 if len(raw) > MAX_CSV_BYTES else 400, "csv_missing_or_too_large")
     try:
         text = raw.decode("utf-8-sig")
-        reader = csv.DictReader(io.StringIO(text))
-        if not reader.fieldnames:
-            raise ValueError("missing_csv_header")
         now = datetime.now(timezone.utc).isoformat()
-        prepared = []
-        seen = set()
-        for line_no, row in enumerate(reader, start=2):
-            raw_code = re.sub(r"\s+", "", _pick(row, CODE_KEYS))
-            digits = _pick(row, DIGITS_KEYS)
-            code = _normalize_code(raw_code, digits or None)
-            fa = _pick(row, FA_KEYS)
-            en = _pick(row, EN_KEYS)
-            raw_parent = _pick(row, PARENT_KEYS)
-            row_source = _pick(row, SOURCE_KEYS) or source
-            if not raw_code and not fa:
-                continue
-            if not code:
-                raise ValueError(f"invalid_hs_code_at_line_{line_no}")
-            if not fa:
-                raise ValueError(f"missing_persian_description_at_line_{line_no}")
-            expected_parent = code[:-2] if len(code) > 2 else None
-            parent = None
-            if raw_parent:
-                parent = _normalize_code(raw_parent, len(code) - 2 if len(code) > 2 else None)
-                if not expected_parent or parent != expected_parent:
-                    raise ValueError(f"invalid_parent_code_at_line_{line_no}")
-            if code in seen:
-                raise ValueError(f"duplicate_hs_code_at_line_{line_no}")
-            seen.add(code)
-            prepared.append((code, fa[:1000], en[:1000], parent or expected_parent,
-                             row_source[:300], source_version, now, 1))
-        if not prepared:
-            raise ValueError("no_valid_rows_found")
+        prepared = _prepare_csv_rows(text, source, source_version, now)
     except (UnicodeDecodeError, csv.Error, ValueError) as exc:
         raise HTTPException(422, str(exc)[:180])
 
