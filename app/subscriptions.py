@@ -506,8 +506,6 @@ def create_billing_portal(user=Depends(_current_user)):
     _require_role(user, "producer")
     if not settings.stripe_secret_key:
         raise HTTPException(503, "billing_not_configured")
-    if urlparse(settings.billing_portal_return_url).scheme != "https":
-        raise HTTPException(503, "billing_portal_return_url_must_use_https")
     con = _con()
     try:
         row = _execute(con, """SELECT plan_code,external_reference FROM marketplace_subscriptions
@@ -519,6 +517,8 @@ def create_billing_portal(user=Depends(_current_user)):
     if not row or not row["external_reference"]:
         raise HTTPException(409, detail={"code": "stripe_subscription_not_found",
                                          "message": "برای این حساب اشتراک فعال Stripe پیدا نشد."})
+    if urlparse(settings.billing_portal_return_url).scheme != "https":
+        raise HTTPException(503, "billing_portal_return_url_must_use_https")
     snapshot = _stripe_subscription_snapshot(str(row["external_reference"]), str(row["plan_code"]))
     customer = snapshot.get("customer")
     if not customer:
