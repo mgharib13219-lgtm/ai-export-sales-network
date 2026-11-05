@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Header, Request
 from pydantic import BaseModel, Field
 
 from app.auth import require_admin
-from app.db import _con, _execute, _is_postgres, add_audit_event
+from app.db import _con, _execute, _is_postgres, _column_exists, add_audit_event
 from app.marketplace import _current_user, _require_role
 from app.settings import settings
 
@@ -69,7 +69,10 @@ def init_subscriptions():
     _execute(con, f"""CREATE TABLE IF NOT EXISTS marketplace_upgrade_requests (
         id {id_type}, user_id INTEGER NOT NULL, plan_code TEXT NOT NULL,
         status TEXT NOT NULL DEFAULT 'pending', note TEXT NOT NULL DEFAULT '',
+        reviewer_note TEXT NOT NULL DEFAULT '',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, reviewed_at TIMESTAMP)""")
+    if not _column_exists(con, "marketplace_upgrade_requests", "reviewer_note"):
+        _execute(con, "ALTER TABLE marketplace_upgrade_requests ADD COLUMN reviewer_note TEXT NOT NULL DEFAULT ''")
     _execute(con, """CREATE TABLE IF NOT EXISTS marketplace_billing_events (
         event_id TEXT PRIMARY KEY, event_type TEXT NOT NULL,
         received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
@@ -290,12 +293,69 @@ def request_plan_upgrade(data: UpgradeRequest, user=Depends(_current_user)):
 @router.get("/upgrade-requests", dependencies=[Depends(require_admin)])
 def admin_upgrade_requests(limit: int = 100):
     con = _con()
-    rows = _execute(con, """SELECT r.id,r.user_id,r.plan_code,r.status,r.note,r.created_at,
-        u.company_name,u.email,u.country FROM marketplace_upgrade_requests r
+    rows = _execute(con, """SELECT r.id,r.user_id,r.plan_code,r.status,r.note,r.reviewer_note,
+        r.created_at,u.company_name,u.email,u.country FROM marketplace_upgrade_requests r
         JOIN marketplace_users u ON u.id=r.user_id
-        WHERE r.status='pending' ORDER BY r.id ASC LIMIT ?""", (max(1, min(limit, 300)),)).fetchall()
+        WHERE r.status='pending' ORDER BY r.id ASC LIMIT ?""",
+        (max(1, min(limit, 300)),)).fetchall()
     con.close()
     return [dict(row) for row in rows]
+
+
+class UpgradeDecision(BaseModel):
+    decision: str = Field(pattern="^(approved|rejected)$")
+    duration_days: int = Field(default=30, ge=1, le=3650)
+    reviewer_note: str = Field(default="", max_length=1000)
+
+
+@router.patch("/upgrade-requests/{request_id}", dependencies=[Depends(require_admin)])
+def review_upgrade_request(request_id: int, data: UpgradeDecision):
+    con = _con()
+    try:
+        row = _execute(con, """SELECT r.id,r.user_id,r.plan_code,r.status,u.email
+            FROM marketplace_upgrade_requests r
+            JOIN marketplace_users u ON u.id=r.user_id WHERE r.id=?""",
+            (request_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "upgrade_request_not_found")
+        if row["status"] != "pending":
+            raise HTTPException(409, "upgrade_request_already_reviewed")
+        if row["plan_code"] not in ("starter", "growth", "premium"):
+            raise HTTPException(409, "upgrade_request_plan_invalid")
+        now = datetime.now(timezone.utc)
+        ends = now + timedelta(days=data.duration_days)
+        updated = _execute(con, """UPDATE marketplace_upgrade_requests
+            SET status=?,reviewer_note=?,reviewed_at=CURRENT_TIMESTAMP
+            WHERE id=? AND status='pending'""",
+            (data.decision, data.reviewer_note.strip(), request_id))
+        if updated.rowcount != 1:
+            raise HTTPException(409, "upgrade_request_already_reviewed")
+        if data.decision == "approved":
+            _execute(con, """UPDATE marketplace_subscriptions SET status='superseded'
+                WHERE user_id=? AND status='active'""", (row["user_id"],))
+            _execute(con, """INSERT INTO marketplace_subscriptions
+                (user_id,plan_code,status,starts_at,ends_at,granted_by,external_reference)
+                VALUES(?,?,'active',?,?,?,?)""",
+                (row["user_id"], row["plan_code"], now.isoformat(), ends.isoformat(),
+                 "admin", "upgrade-request:" + str(request_id)))
+        con.commit()
+    except Exception:
+        con.rollback()
+        raise
+    finally:
+        con.close()
+    add_audit_event(
+        "marketplace.upgrade_" + data.decision, "admin", str(row["user_id"]),
+        "subscription_request", str(request_id),
+        {"plan": row["plan_code"], "duration_days": data.duration_days if data.decision == "approved" else None,
+         "reviewer_note": data.reviewer_note.strip()}
+    )
+    return {"request_id": request_id, "status": data.decision,
+            "user_id": row["user_id"], "plan_code": row["plan_code"] if data.decision == "approved" else None,
+            "ends_at": ends.isoformat() if data.decision == "approved" else None,
+            "note": "Manual operator approval is not proof of a Stripe payment." if data.decision == "approved"
+                    else "درخواست رد شد؛ پلن فعلی کاربر تغییر نکرد."}
+
 
 
 def _verify_stripe_signature(payload: bytes, signature_header: str) -> bool:
