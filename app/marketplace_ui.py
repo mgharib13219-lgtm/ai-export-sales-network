@@ -175,13 +175,27 @@ async function submitRequest(){
  catch(e){showMessage('requestmsg',e.message);}
 }
 async function loadRequests(){
- try{const data=await api('/marketplace/requests');const box=$('requests');box.replaceChildren();
- (data||[]).forEach(r=>{const card=node('article','card');card.append(node('h3','',r.title),node('p','',r.category+' · '+r.destination));
- const details=r.specification||r.specification_preview||'برای مشاهده مشخصات کامل، پلن خود را ارتقا دهید.';
- card.append(node('p','',details+' · مقدار: '+(r.quantity||'در پلن فعلی نمایش داده نمی‌شود')));
- const btn=node('button','secondary','پیدا کردن محصولات من');btn.addEventListener('click',async()=>{try{const m=await api('/marketplace/matches/requests/'+r.id);card.append(node('pre','status',JSON.stringify(m.matches,null,2)));}catch(e){card.append(node('p','status',e.message));}});card.append(btn);box.append(card);});
- if(!data.length)box.append(node('p','muted','درخواست خرید بازی وجود ندارد.'));
- (data||[]).forEach(r=>{if(r.buyer_company){const privacy=node('p','muted','شرکت خریدار: '+r.buyer_company+' · '+(r.buyer_country||'')+' · '+(r.buyer_email||''));const target=box.lastElementChild;if(target)target.append(privacy);}});
+ try{
+  const data=await api('/marketplace/requests');
+  const box=$('requests');box.replaceChildren();
+  (data||[]).forEach(r=>{
+   const card=node('article','card');
+   card.append(node('h3','',r.title),node('p','',r.category+' · '+r.destination));
+   const details=r.specification||r.specification_preview||'برای مشاهده مشخصات کامل، پلن خود را ارتقا دهید.';
+   card.append(node('p','',details+' · مقدار: '+(r.quantity||'در پلن فعلی نمایش داده نمی‌شود')));
+   if(r.buyer_company){
+    card.append(node('p','muted','شرکت خریدار: '+r.buyer_company+' · '+(r.buyer_country||'')+' · '+(r.buyer_email||'')));
+   }
+   const btn=node('button','secondary','پیدا کردن محصولات من');
+   btn.addEventListener('click',async()=>{
+    try{
+     const m=await api('/marketplace/matches/requests/'+r.id);
+     card.append(node('pre','status',JSON.stringify(m.matches,null,2)));
+    }catch(e){card.append(node('p','status',e.message));}
+   });
+   card.append(btn);box.append(card);
+  });
+  if(!data.length)box.append(node('p','muted','درخواست خرید بازی وجود ندارد.'));
  }catch(e){showMessage('requests',e.message);}
 }
 $('register').addEventListener('click',register);$('login').addEventListener('click',login);$('changepass').addEventListener('click',changePassword);
