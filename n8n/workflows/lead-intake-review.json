@@ -6,7 +6,8 @@
         "httpMethod": "POST",
         "path": "lead-intake-review",
         "responseMode": "onReceived",
-        "options": {}
+        "options": {},
+        "authentication": "headerAuth"
       },
       "id": "lead-webhook",
       "name": "Lead Intake Webhook",
