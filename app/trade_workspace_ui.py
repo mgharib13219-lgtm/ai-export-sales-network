@@ -22,7 +22,7 @@ button:disabled{opacity:.5}.card{border:1px solid #e2e8f0;border-radius:11px;pad
 </style></head><body>
 <header><h1>فضای کاری تأمین‌کننده</h1>
 <p class="muted">مدیریت موجودی انبار و لیست قیمت صادراتی در یک صفحه. اطلاعات کالا و موجودی توسط شرکت شما ثبت می‌شود و به‌تنهایی گواهی بازرسی یا تأیید مستقل موجودی نیست.</p>
-<nav><a href="/">داشبورد</a><a href="/market">بازار جهانی</a><a href="/docs">مستندات API</a></nav></header>
+<nav><a href="/dashboard">داشبورد عملیاتی</a><a href="/market">بازار جهانی</a><a href="/docs">مستندات API</a></nav></header>
 <section id="auth"><h2>ورود به فضای کاری</h2><p class="muted">برای ادامه، از حساب تأمین‌کننده در بازار جهانی وارد شوید.</p><a href="/market">ورود یا ساخت حساب ←</a><p id="authmsg" class="status">در حال بررسی حساب...</p></section>
 <section id="overview" hidden><div class="row"><div><h2>نمای کلی موجودی</h2><p class="muted">مقدار رزروشده از مقدار قابل عرضه کسر می‌شود.</p></div><button id="refresh" class="secondary">به‌روزرسانی</button></div><div id="stats" class="grid"></div></section>
 <section id="inventory" hidden><h2>ثبت موجودی انبار</h2><p class="muted">قالب‌ها صرفاً تعریف نمونه کالا هستند و ادعایی درباره موجودی واقعی ایجاد نمی‌کنند.</p>
