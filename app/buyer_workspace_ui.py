@@ -22,7 +22,7 @@ textarea{min-height:115px}button{background:#172b4d;color:white;border:0;cursor:
 </style></head><body>
 <header><h1>فضای کاری خریدار</h1>
 <p class="muted">درخواست‌های خرید خود را مدیریت کنید و تأمین‌کنندگان احتمالی را بر اساس مشخصات کالا ببینید. امتیاز تطبیق صرفاً ابزار کشف است؛ هویت، کیفیت، گواهی‌ها و امکان صادرات باید جداگانه بررسی شوند.</p>
-<nav><a href="/">داشبورد</a><a href="/market">بازار جهانی</a><a href="/trade/workspace">فضای تأمین‌کننده</a></nav></header>
+<nav><a href="/dashboard">داشبورد عملیاتی</a><a href="/market">بازار جهانی</a><a href="/trade/workspace">فضای تأمین‌کننده</a></nav></header>
 <section id="auth"><h2>ورود به حساب خریدار</h2><p class="muted">ابتدا در بازار جهانی با نقش خریدار وارد شوید.</p><a href="/market">ورود یا ساخت حساب ←</a><p id="authmsg" class="status">در حال بررسی حساب...</p></section>
 <section id="create" hidden><h2>ثبت درخواست خرید جدید</h2><div class="grid">
 <input id="title" placeholder="نام کالا، مثلاً کشمش طلایی"><input id="category" placeholder="دسته‌بندی دقیق">
