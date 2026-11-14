@@ -33,9 +33,30 @@ button.secondary{background:#eef2f6;color:#182230;border:1px solid #d7dde5}
 .poster-secondary .poster-link{background:#fff;color:#075b5c}
 @media(max-width:700px){.poster-grid{grid-template-columns:1fr}.poster{min-height:210px;padding:20px}.poster-art{font-size:62px;right:16px}.poster h2{max-width:90%}}
 [hidden]{display:none!important}
+
+/* Unified responsive navigation and visual polish */
+:root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Tahoma,Arial,sans-serif;color:#10243e;background:#edf2f8;--brand:#0759a6;--ink:#10243e;--line:#dce5ef;--surface:#fff}
+body{max-width:1200px;padding:clamp(10px,2.2vw,26px);line-height:1.65}
+header,section{border:1px solid var(--line);border-radius:20px;box-shadow:0 8px 28px rgba(15,42,75,.055);padding:clamp(16px,2.3vw,26px);margin:16px 0}
+header{position:relative;background:linear-gradient(145deg,#fff 55%,#f2f8ff)}
+h1{font-size:clamp(25px,3vw,36px);letter-spacing:-.5px;color:#0b315c}
+h2{font-size:clamp(19px,2.2vw,25px);color:#123c69}
+nav{align-items:center;gap:8px;margin:14px 0}
+nav a{display:inline-flex;align-items:center;padding:9px 14px;border-radius:12px;background:#eaf3ff;color:#0759a6!important;border:1px solid #d8e9ff;transition:background .18s,transform .18s}
+nav a:hover{background:#d9eaff;transform:translateY(-1px)}
+.grid{gap:12px}
+input,textarea,select{background:#fff;border:1px solid #cbd8e7;border-radius:12px;padding:12px;transition:border-color .18s,box-shadow .18s}
+input:focus,textarea:focus,select:focus{border-color:#3984d6;box-shadow:0 0 0 3px #3984d61a;outline:none}
+button{border-radius:12px;padding:11px 16px;background:linear-gradient(135deg,#0759a6,#0b76c9);font-weight:700;box-shadow:0 4px 10px #0759a61a;transition:transform .15s,filter .15s}
+button:hover{filter:brightness(1.06);transform:translateY(-1px)}button.secondary{background:#edf4fb;color:#17446f;border:1px solid #d5e3f1;box-shadow:none}
+.card{border-radius:15px;border-color:#e1eaf3;background:linear-gradient(180deg,#fff,#fbfdff);padding:16px}
+.status{border:1px solid #e1eaf3;background:#f4f8fc;border-radius:12px}
+#siteMenuToggle{display:none;width:auto;min-width:48px;font-size:22px;line-height:1;padding:10px 13px;margin:10px 0;background:#eaf3ff;color:#0759a6;border:1px solid #d5e7fb;box-shadow:none}
+@media(max-width:680px){body{padding:8px}header,section{border-radius:16px;padding:15px;margin:10px 0}#siteMenuToggle{display:inline-flex;align-items:center;justify-content:center}header nav{display:none;flex-direction:column;align-items:stretch;gap:6px;margin:8px 0}header nav.nav-open{display:flex}header nav a{width:100%;padding:12px 14px;font-size:15px}h1{font-size:25px}button{min-height:44px}.grid{grid-template-columns:1fr}}
+@media(min-width:681px){header nav{display:flex!important}}
 </style></head><body>
 <header><h1>بازار تجارت جهانی</h1>
-<div class="grid" style="align-items:center"><span class="muted" id="language-label">زبان / Language</span><select id="language" aria-label="Language"><option value="fa">فارسی</option><option value="en">English</option></select></div><nav aria-label="ناوبری اصلی"><a href="/market">بازار جهانی</a><a href="/trade/workspace">انبار و لیست قیمت صادراتی</a><a href="/buyer/workspace">پنل خریدار</a></nav>
+<div class="grid" style="align-items:center"><span class="muted" id="language-label">زبان / Language</span><select id="language" aria-label="Language"><option value="fa">فارسی</option><option value="en">English</option></select></div><button id="siteMenuToggle" type="button" aria-label="باز کردن منوی ناوبری" aria-controls="siteMainNav" aria-expanded="false">☰</button><nav id="siteMainNav" aria-label="ناوبری اصلی"><a href="/market">بازار جهانی</a><a href="/trade/workspace">انبار و لیست قیمت صادراتی</a><a href="/buyer/workspace">پنل خریدار</a></nav>
 <p class="muted">ثبت محصول، درخواست خرید و کشف تأمین‌کننده برای هر نوع کالا. تطبیق‌ها پیشنهادی‌اند و به‌معنای تأیید هویت یا مجوز تجاری نیستند.</p>
 <div class="grid"><button id="logout" class="secondary" hidden>خروج از حساب</button><span id="account" class="status">برای شروع وارد شوید یا حساب بسازید.</span></div></header>
 <section class="poster-grid" aria-label="معرفی بازار تجارت جهانی">
@@ -339,6 +360,8 @@ $('logout').addEventListener('click',async()=>{try{await api('/marketplace/logou
 // Product search is intentionally lazy: avoid an API round-trip on every page visit.
 let initialLanguage='fa';try{initialLanguage=localStorage.getItem('market_language')||'fa';}catch{}applyLanguage(initialLanguage);
 if(token())api('/marketplace/me').then(data=>{user=data;renderAccount();}).catch(()=>{sessionStorage.removeItem('market_token');renderAccount();});
+</script><script>
+(function(){const b=document.getElementById("siteMenuToggle"),n=document.querySelector("header nav");if(!b||!n)return;b.addEventListener("click",function(){const open=n.classList.toggle("nav-open");b.setAttribute("aria-expanded",String(open));b.textContent=open?"×":"☰";});n.addEventListener("click",function(e){if(e.target.closest("a")&&window.matchMedia("(max-width:680px)").matches){n.classList.remove("nav-open");b.setAttribute("aria-expanded","false");b.textContent="☰";}});})();
 </script></body></html>"""
 
 

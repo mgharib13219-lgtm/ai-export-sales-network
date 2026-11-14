@@ -19,10 +19,31 @@ button:disabled{opacity:.5}.card{border:1px solid #e2e8f0;border-radius:11px;pad
 .status{background:#f1f5f9;padding:10px;border-radius:9px;white-space:pre-wrap}.pill{display:inline-block;background:#eaf0ff;color:#23408e;border-radius:99px;padding:3px 9px;font-size:12px;margin:2px}
 .row{display:flex;gap:8px;align-items:center}.row>*{flex:1}.actions button{width:auto;min-width:125px}[hidden]{display:none!important}
 @media(max-width:600px){body{padding:9px}.row{display:block}.actions button{width:100%}}
+
+/* Unified responsive navigation and visual polish */
+:root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Tahoma,Arial,sans-serif;color:#10243e;background:#edf2f8;--brand:#0759a6;--ink:#10243e;--line:#dce5ef;--surface:#fff}
+body{max-width:1200px;padding:clamp(10px,2.2vw,26px);line-height:1.65}
+header,section{border:1px solid var(--line);border-radius:20px;box-shadow:0 8px 28px rgba(15,42,75,.055);padding:clamp(16px,2.3vw,26px);margin:16px 0}
+header{position:relative;background:linear-gradient(145deg,#fff 55%,#f2f8ff)}
+h1{font-size:clamp(25px,3vw,36px);letter-spacing:-.5px;color:#0b315c}
+h2{font-size:clamp(19px,2.2vw,25px);color:#123c69}
+nav{align-items:center;gap:8px;margin:14px 0}
+nav a{display:inline-flex;align-items:center;padding:9px 14px;border-radius:12px;background:#eaf3ff;color:#0759a6!important;border:1px solid #d8e9ff;transition:background .18s,transform .18s}
+nav a:hover{background:#d9eaff;transform:translateY(-1px)}
+.grid{gap:12px}
+input,textarea,select{background:#fff;border:1px solid #cbd8e7;border-radius:12px;padding:12px;transition:border-color .18s,box-shadow .18s}
+input:focus,textarea:focus,select:focus{border-color:#3984d6;box-shadow:0 0 0 3px #3984d61a;outline:none}
+button{border-radius:12px;padding:11px 16px;background:linear-gradient(135deg,#0759a6,#0b76c9);font-weight:700;box-shadow:0 4px 10px #0759a61a;transition:transform .15s,filter .15s}
+button:hover{filter:brightness(1.06);transform:translateY(-1px)}button.secondary{background:#edf4fb;color:#17446f;border:1px solid #d5e3f1;box-shadow:none}
+.card{border-radius:15px;border-color:#e1eaf3;background:linear-gradient(180deg,#fff,#fbfdff);padding:16px}
+.status{border:1px solid #e1eaf3;background:#f4f8fc;border-radius:12px}
+#siteMenuToggle{display:none;width:auto;min-width:48px;font-size:22px;line-height:1;padding:10px 13px;margin:10px 0;background:#eaf3ff;color:#0759a6;border:1px solid #d5e7fb;box-shadow:none}
+@media(max-width:680px){body{padding:8px}header,section{border-radius:16px;padding:15px;margin:10px 0}#siteMenuToggle{display:inline-flex;align-items:center;justify-content:center}header nav{display:none;flex-direction:column;align-items:stretch;gap:6px;margin:8px 0}header nav.nav-open{display:flex}header nav a{width:100%;padding:12px 14px;font-size:15px}h1{font-size:25px}button{min-height:44px}.grid{grid-template-columns:1fr}}
+@media(min-width:681px){header nav{display:flex!important}}
 </style></head><body>
 <header><div class="actions"><button id="langToggle" class="secondary" type="button">English</button></div><h1>فضای کاری تأمین‌کننده</h1>
 <p class="muted">مدیریت موجودی انبار و لیست قیمت صادراتی در یک صفحه. اطلاعات کالا و موجودی توسط شرکت شما ثبت می‌شود و به‌تنهایی گواهی بازرسی یا تأیید مستقل موجودی نیست.</p>
-<nav><a href="/market">بازار جهانی</a><a href="/docs">مستندات API</a></nav></header>
+<button id="siteMenuToggle" type="button" aria-label="باز کردن منوی ناوبری" aria-controls="siteMainNav" aria-expanded="false">☰</button><nav id="siteMainNav"><a href="/market">بازار جهانی</a><a href="/docs">مستندات API</a></nav></header>
 <section id="auth"><h2>ورود به فضای کاری</h2><p class="muted">برای ادامه، از حساب تأمین‌کننده در بازار جهانی وارد شوید.</p><a href="/market">ورود یا ساخت حساب ←</a><p id="authmsg" class="status">در حال بررسی حساب...</p></section>
 <section id="overview" hidden><div class="row"><div><h2>نمای کلی موجودی</h2><p class="muted">مقدار رزروشده از مقدار قابل عرضه کسر می‌شود.</p></div><button id="refresh" class="secondary">به‌روزرسانی</button></div><div id="stats" class="grid"></div></section>
 <section id="inventory" hidden><h2>ثبت موجودی انبار</h2><p class="muted">قالب‌ها صرفاً تعریف نمونه کالا هستند و ادعایی درباره موجودی واقعی ایجاد نمی‌کنند.</p>
@@ -86,6 +107,8 @@ $("addItem").addEventListener("click",async()=>{if(!selected)return;const p={pro
 $("cancelSelect").addEventListener("click",clearList);$("refresh").addEventListener("click",async()=>{try{await Promise.all([loadStock(),loadLists()]);}catch(e){msg("authmsg",explain(e));}});
 $("langToggle").addEventListener("click",()=>setLanguage(document.documentElement.lang==="fa"?"en":"fa"));setLanguage(localStorage.getItem("supplier_workspace_lang")==="en"?"en":"fa");initialize();
 })();
+</script><script>
+(function(){const b=document.getElementById("siteMenuToggle"),n=document.querySelector("header nav");if(!b||!n)return;b.addEventListener("click",function(){const open=n.classList.toggle("nav-open");b.setAttribute("aria-expanded",String(open));b.textContent=open?"×":"☰";});n.addEventListener("click",function(e){if(e.target.closest("a")&&window.matchMedia("(max-width:680px)").matches){n.classList.remove("nav-open");b.setAttribute("aria-expanded","false");b.textContent="☰";}});})();
 </script></body></html>"""
 
 @router.get("/trade/workspace", response_class=HTMLResponse)
