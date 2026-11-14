@@ -231,7 +231,8 @@ def integration_status():
 
 @app.get('/', include_in_schema=False)
 def public_home():
-    return RedirectResponse(url='/market', status_code=307)
+    # Serve the marketplace directly; avoid an extra redirect round trip.
+    return marketplace_home()
 
 
 @app.get('/dashboard', response_class=HTMLResponse)
