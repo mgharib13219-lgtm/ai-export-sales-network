@@ -127,7 +127,7 @@ function applyLanguage(lang){
  document.querySelector('header h1').textContent=t.headings[0];
  document.querySelector('header .muted').textContent=t.intro;
  document.querySelectorAll('header nav a').forEach((a,i)=>a.textContent=t.nav[i]||a.textContent);
- document.querySelectorAll('h2').forEach((e,i)=>{if(t.headings[i+1])e.textContent=t.headings[i+1];});
+ document.querySelectorAll('section:not(.poster-grid) h2').forEach((e,i)=>{if(t.headings[i+1])e.textContent=t.headings[i+1];});
  Object.entries(t.ids).forEach(([id,value])=>{const e=$(id);if(e)e.textContent=value;});
  Object.entries(t.placeholders).forEach(([id,value])=>{const e=$(id);if(e)e.placeholder=value;});
  const role=$('role');role.options[0].textContent=t.role[0];role.options[1].textContent=t.role[1];
