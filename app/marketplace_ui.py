@@ -54,7 +54,17 @@ button:hover{filter:brightness(1.06);transform:translateY(-1px)}button.secondary
 #siteMenuToggle{display:none;width:auto;min-width:48px;font-size:22px;line-height:1;padding:10px 13px;margin:10px 0;background:#eaf3ff;color:#0759a6;border:1px solid #d5e7fb;box-shadow:none}
 @media(max-width:680px){body{padding:8px}header,section{border-radius:16px;padding:15px;margin:10px 0}#siteMenuToggle{display:inline-flex;align-items:center;justify-content:center}header nav{display:none;flex-direction:column;align-items:stretch;gap:6px;margin:8px 0}header nav.nav-open{display:flex}header nav a{width:100%;padding:12px 14px;font-size:15px}h1{font-size:25px}button{min-height:44px}.grid{grid-template-columns:1fr}}
 @media(min-width:681px){header nav{display:flex!important}}
-</style></head><body>
+
+/* Accessibility, page identity and navigation consistency */
+html{scroll-behavior:smooth;scroll-padding-top:18px}body{min-height:100vh;display:flex;flex-direction:column}body>header{order:0}body>section{order:1}body>footer{order:2;margin-top:auto}
+#skip-to-content{position:absolute;top:-100px;right:12px;z-index:1000;padding:10px 14px;background:#102f52;color:#fff;border-radius:10px}#skip-to-content:focus{top:12px}
+header nav a[aria-current=page]{background:#0759a6;color:#fff!important;border-color:#0759a6;box-shadow:0 5px 14px #0759a622}
+footer.site-footer{display:grid;grid-template-columns:1.3fr 1fr;gap:18px;padding:20px 22px;margin:18px 0 4px;background:#102f52;color:#e8f2ff;border-radius:18px}
+footer.site-footer p{margin:4px 0;color:#c5d8ec;font-size:13px;line-height:1.8}footer.site-footer strong{color:#fff}footer.site-footer nav{display:flex;flex-wrap:wrap;align-content:start;gap:8px;margin:0}footer.site-footer nav a{display:inline-flex;padding:7px 10px;border-radius:9px;background:#ffffff14;color:#e8f2ff;text-decoration:none;font-size:13px}footer.site-footer nav a:hover{background:#ffffff25}
+section{scroll-margin-top:16px}section h2{display:flex;align-items:center;gap:9px}section h2:before{content:"";display:inline-block;width:4px;height:22px;border-radius:4px;background:#1684cf}
+@media(max-width:680px){footer.site-footer{grid-template-columns:1fr;gap:12px;padding:17px}footer.site-footer nav{flex-direction:column}footer.site-footer nav a{width:100%}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*:before,*:after{transition:none!important;animation:none!important}}
+</style></head><body><a id="skip-to-content" href="#main-content">رفتن به محتوای اصلی</a>
 <header><h1>بازار تجارت جهانی</h1>
 <div class="grid" style="align-items:center"><span class="muted" id="language-label">زبان / Language</span><select id="language" aria-label="Language"><option value="fa">فارسی</option><option value="en">English</option></select></div><button id="siteMenuToggle" type="button" aria-label="باز کردن منوی ناوبری" aria-controls="siteMainNav" aria-expanded="false">☰</button><nav id="siteMainNav" aria-label="ناوبری اصلی"><a href="/market">بازار جهانی</a><a href="/trade/workspace">انبار و لیست قیمت صادراتی</a><a href="/buyer/workspace">پنل خریدار</a></nav>
 <p class="muted">ثبت محصول، درخواست خرید و کشف تأمین‌کننده برای هر نوع کالا. تطبیق‌ها پیشنهادی‌اند و به‌معنای تأیید هویت یا مجوز تجاری نیستند.</p>
@@ -75,7 +85,7 @@ button:hover{filter:brightness(1.06);transform:translateY(-1px)}button.secondary
   <span class="poster-art" aria-hidden="true">🤝 📦</span>
  </article>
 </section>
-<section id="auth"><h2>ورود یا ثبت‌نام</h2><div class="grid">
+<main id="main-content"><section id="auth"><h2>ورود یا ثبت‌نام</h2><div class="grid">
 <input id="email" type="email" placeholder="ایمیل کاری">
 <input id="password" type="password" placeholder="گذرواژه (حداقل ۱۲ نویسه)">
 <input id="company" placeholder="نام شرکت">
@@ -362,6 +372,8 @@ let initialLanguage='fa';try{initialLanguage=localStorage.getItem('market_langua
 if(token())api('/marketplace/me').then(data=>{user=data;renderAccount();}).catch(()=>{sessionStorage.removeItem('market_token');renderAccount();});
 </script><script>
 (function(){const b=document.getElementById("siteMenuToggle"),n=document.querySelector("header nav");if(!b||!n)return;b.addEventListener("click",function(){const open=n.classList.toggle("nav-open");b.setAttribute("aria-expanded",String(open));b.textContent=open?"×":"☰";});n.addEventListener("click",function(e){if(e.target.closest("a")&&window.matchMedia("(max-width:680px)").matches){n.classList.remove("nav-open");b.setAttribute("aria-expanded","false");b.textContent="☰";}});})();
+</script></main><footer class="site-footer"><div><strong>شبکه تجارت جهانی</strong><p>ابزار کشف فرصت، مدیریت درخواست خرید و معرفی تأمین‌کننده. اطلاعات تجاری و تطبیق‌ها نیازمند بررسی مستقل هستند.</p><p>© شبکه تجارت جهانی</p></div><nav aria-label="پیوندهای پایانی"><a href="/market">بازار جهانی</a><a href="/buyer/workspace">فضای خریدار</a><a href="/trade/workspace">فضای تأمین‌کننده</a><a href="/docs">مستندات</a></nav></footer><script>
+(function(){const nav=document.querySelector("header nav");if(!nav)return;const links=nav.querySelectorAll("a[href]");links.forEach(a=>{try{const target=new URL(a.href,location.href);if(target.pathname.replace(/\\/$/,"")===location.pathname.replace(/\\/$/,""))a.setAttribute("aria-current","page");}catch(_){}});document.addEventListener("keydown",e=>{if(e.key==="Escape"&&nav.classList.contains("nav-open")){nav.classList.remove("nav-open");const b=document.getElementById("siteMenuToggle");if(b){b.setAttribute("aria-expanded","false");b.textContent="☰";b.focus();}}});})();
 </script></body></html>"""
 
 
