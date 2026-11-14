@@ -11,7 +11,7 @@ PAGE = r"""<!doctype html>
 <title>بازار تجارت جهانی</title>
 <style>
 :root{font-family:system-ui,Tahoma,Arial;color:#182230;background:#f4f6f8}
-body{max-width:1080px;margin:auto;padding:18px}
+body{max-width:1080px;margin:auto;padding:18px} nav{display:flex;gap:12px;flex-wrap:wrap;align-items:center} nav a{color:#155eef;text-decoration:none;font-weight:600} header nav{margin:10px 0} header nav a{padding:7px 10px;border-radius:8px;background:#f0f4f8} button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #84adff;outline-offset:2px} @media(max-width:600px){body{padding:8px}header,section{padding:13px}nav{gap:6px}nav a{font-size:13px}}
 header,section{background:#fff;border:1px solid #e5e9ef;border-radius:14px;padding:18px;margin:12px 0}
 h1,h2{margin-top:0}.muted{color:#667085;font-size:14px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
@@ -23,7 +23,7 @@ button.secondary{background:#eef2f6;color:#182230;border:1px solid #d7dde5}
 [hidden]{display:none!important}
 </style></head><body>
 <header><h1>بازار تجارت جهانی</h1>
-<nav aria-label="ناوبری اصلی"><a href="/">داشبورد</a> · <a href="/trade/workspace">انبار و لیست قیمت صادراتی</a> · <a href="/buyer/workspace">پنل خریدار</a></nav>
+<div class="grid" style="align-items:center"><span class="muted" id="language-label">زبان / Language</span><select id="language" aria-label="Language"><option value="fa">فارسی</option><option value="en">English</option></select></div><nav aria-label="ناوبری اصلی"><a href="/dashboard">داشبورد عملیاتی</a><a href="/market">بازار جهانی</a><a href="/trade/workspace">انبار و لیست قیمت صادراتی</a><a href="/buyer/workspace">پنل خریدار</a></nav>
 <p class="muted">ثبت محصول، درخواست خرید و کشف تأمین‌کننده برای هر نوع کالا. تطبیق‌ها پیشنهادی‌اند و به‌معنای تأیید هویت یا مجوز تجاری نیستند.</p>
 <div class="grid"><button id="logout" class="secondary" hidden>خروج از حساب</button><span id="account" class="status">برای شروع وارد شوید یا حساب بسازید.</span></div></header>
 <section id="auth"><h2>ورود یا ثبت‌نام</h2><div class="grid">
@@ -68,6 +68,47 @@ async function api(path,options={}) {
  if(!response.ok) throw new Error(data.detail||data.error||('HTTP '+response.status));
  return data;
 }
+
+const languageCopy={
+ en:{
+  title:'Global Trade Marketplace',nav:['Dashboard','Global marketplace','Export inventory & price lists','Buyer workspace'],
+  headings:['Global Trade Marketplace','Sign in or create an account','Account security','Plan and account features','Buyer discovery agent','Iran Customs Tariff Directory (HS)','Product search','Publish a product','Open purchase requests','Create a purchase request'],
+  ids:{account:'Sign in or create an account to begin.',register:'Create account',login:'Sign in',changepass:'Change password and sign out all devices',discoverbuyers:'Find buyers',refreshBuyerCandidates:'Show saved leads',hscodebtn:'Search tariffs',searchbtn:'Search',publish:'Publish product',loadrequests:'Load requests',submitrequest:'Submit request',logout:'Sign out'},
+  placeholders:{email:'Business email',password:'Password (at least 12 characters)',company:'Company name',country:'Country',hscodeq:'Tariff code or product name',search:'Product name or specifications',category:'Category',buyerterms:'Product or keyword, e.g. industrial pump parts',buyercountry:'Target country, e.g. Germany',pname:'Product name',pcategory:'Category',porigin:'Country of origin',pcapacity:'Production capacity',pmoq:'Minimum order quantity',pmarkets:'Target markets',rtitle:'Product name',rcategory:'Category',rdestination:'Destination country',rquantity:'Required quantity'},
+  intro:'List products, submit buying requests and discover suppliers worldwide. Matches are suggestions, not proof of identity or trade authorization.',
+  tariff:'Search by HS code or Persian/English description. Only rows imported from documented sources are displayed.',
+  start:'For account access, sign in or create an account.',
+  role:['Producer / Supplier','Buyer'],levels:['All levels','2 digits','4 digits','6 digits','8 digits']
+ },
+ fa:{
+  title:'بازار تجارت جهانی',nav:['داشبورد','بازار جهانی','انبار و لیست قیمت صادراتی','پنل خریدار'],
+  headings:['بازار تجارت جهانی','ورود یا ثبت‌نام','امنیت حساب','پلن و امکانات حساب','جست‌وجوی خریدار با ایجنت','فهرست جامع تعرفه‌های گمرکی ایران (HS)','جست‌وجوی محصولات','ثبت محصول','درخواست‌های خرید باز','ثبت درخواست خرید'],
+  ids:{account:'برای شروع وارد شوید یا حساب بسازید.',register:'ایجاد حساب',login:'ورود',changepass:'تغییر گذرواژه و خروج از همه دستگاه‌ها',discoverbuyers:'جست‌وجوی خریداران',refreshBuyerCandidates:'نمایش سرنخ‌های ذخیره‌شده',hscodebtn:'جست‌وجوی تعرفه',searchbtn:'جست‌وجو',publish:'انتشار محصول',loadrequests:'بارگذاری درخواست‌ها',submitrequest:'ثبت درخواست',logout:'خروج از حساب'},
+  placeholders:{email:'ایمیل کاری',password:'گذرواژه (حداقل ۱۲ نویسه)',company:'نام شرکت',country:'کشور',hscodeq:'کد تعرفه یا نام کالا',search:'نام یا مشخصات محصول',category:'دسته‌بندی',buyerterms:'محصول یا کلمه کلیدی، مثلاً قطعات پمپ صنعتی',buyercountry:'کشور هدف، مثلاً آلمان',pname:'نام محصول',pcategory:'دسته‌بندی',porigin:'کشور مبدأ',pcapacity:'ظرفیت تولید',pmoq:'حداقل سفارش',pmarkets:'بازارهای هدف',rtitle:'نام کالا',rcategory:'دسته‌بندی',rdestination:'کشور مقصد',rquantity:'مقدار موردنیاز'},
+  intro:'ثبت محصول، درخواست خرید و کشف تأمین‌کننده برای هر نوع کالا. تطبیق‌ها پیشنهادی‌اند و به‌معنای تأیید هویت یا مجوز تجاری نیستند.',
+  tariff:'جست‌وجو بر اساس کد تعرفه یا شرح فارسی/انگلیسی؛ نمایش فقط ردیف‌هایی که از منبع رسمی/مستند وارد شده‌اند.',
+  start:'برای شروع وارد شوید یا حساب بسازید.',
+  role:['تولیدکننده / تأمین‌کننده','خریدار'],levels:['همه سطوح','۲ رقمی','۴ رقمی','۶ رقمی','۸ رقمی']
+ }
+};
+function applyLanguage(lang){
+ const t=languageCopy[lang]||languageCopy.fa,english=lang==='en';
+ document.documentElement.lang=english?'en':'fa';document.documentElement.dir=english?'ltr':'rtl';
+ document.title=t.title;
+ document.querySelector('header h1').textContent=t.headings[0];
+ document.querySelector('header .muted').textContent=t.intro;
+ document.querySelectorAll('header nav a').forEach((a,i)=>a.textContent=t.nav[i]||a.textContent);
+ document.querySelectorAll('h2').forEach((e,i)=>{if(t.headings[i+1])e.textContent=t.headings[i+1];});
+ Object.entries(t.ids).forEach(([id,value])=>{const e=$(id);if(e)e.textContent=value;});
+ Object.entries(t.placeholders).forEach(([id,value])=>{const e=$(id);if(e)e.placeholder=value;});
+ const role=$('role');role.options[0].textContent=t.role[0];role.options[1].textContent=t.role[1];
+ const levels=$('hslevel');t.levels.forEach((v,i)=>levels.options[i].textContent=v);
+ $('language-label').textContent=english?'Language / زبان':'زبان / Language';
+ $('hscount').textContent=english?'Search to view tariff entries.':'برای مشاهده، جست‌وجو کنید.';
+ $('language').value=lang;
+ try{localStorage.setItem('market_language',lang);}catch{}
+}
+
 function node(tag,cls,text){const e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=String(text);return e;}
 function showMessage(id,value){$(id).textContent=typeof value==='string'?value:JSON.stringify(value,null,2);}
 async function loadHsCatalog(){
@@ -94,7 +135,6 @@ async function loadProducts(){
  if(!data.length){box.append(node('p','muted','محصولی یافت نشد.'));return;}
  data.forEach(p=>{const card=node('article','card');card.append(node('h3','',p.name),node('p','',p.category+' · '+p.origin),node('p','',p.description),node('p','muted','شرکت: '+p.company_name+' | کشور: '+p.country+' | ظرفیت: '+(p.capacity||'نامشخص')+' | MOQ: '+(p.moq||'نامشخص')));box.append(card);});
 }
-async 
 async function loadSubscription(){
  const [current,plans,credits]=await Promise.all([
   api('/marketplace/subscription/me'),api('/marketplace/subscription/plans'),api('/marketplace/subscription/credits')
@@ -247,6 +287,7 @@ async function loadRequests(){
   if(!data.length)box.append(node('p','muted','درخواست خرید بازی وجود ندارد.'));
  }catch(e){showMessage('requests',e.message);}
 }
+$('language').addEventListener('change',e=>applyLanguage(e.target.value));
 $('register').addEventListener('click',register);$('login').addEventListener('click',login);$('changepass').addEventListener('click',changePassword);
 $('publish').addEventListener('click',publish);$('submitrequest').addEventListener('click',submitRequest);
 $('searchbtn').addEventListener('click',()=>loadProducts().catch(e=>showMessage('products',e.message)));
@@ -257,6 +298,7 @@ $('discoverbuyers').addEventListener('click',discoverBuyers);
 $('refreshBuyerCandidates').addEventListener('click',loadSavedBuyerCandidates);
 $('logout').addEventListener('click',async()=>{try{await api('/marketplace/logout',{method:'POST'});}catch{}sessionStorage.removeItem('market_token');user=null;renderAccount();});
 loadProducts().catch(e=>showMessage('products',e.message));
+let initialLanguage='fa';try{initialLanguage=localStorage.getItem('market_language')||'fa';}catch{}applyLanguage(initialLanguage);
 if(token())api('/marketplace/me').then(data=>{user=data;renderAccount();}).catch(()=>{sessionStorage.removeItem('market_token');renderAccount();});
 </script></body></html>"""
 

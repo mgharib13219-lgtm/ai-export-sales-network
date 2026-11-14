@@ -67,3 +67,24 @@ def test_buyer_workspace_page_is_registered():
     assert response.status_code == 200
     assert 'id="requestList"' in response.text
     assert response.headers["x-frame-options"] == "DENY"
+
+
+def test_buyer_workspace_inline_javascript_parses_when_node_is_available():
+    import re
+    import shutil
+    import subprocess
+
+    if not shutil.which("node"):
+        return
+    from app.buyer_workspace_ui import router
+    app = FastAPI()
+    app.include_router(router)
+    response = TestClient(app).get("/buyer/workspace")
+    scripts = re.findall(r"<script[^>]*>(.*?)</script>", response.text, re.DOTALL)
+    assert scripts, "buyer workspace must include its application script"
+    for script in scripts:
+        checked = subprocess.run(
+            ["node", "--check"], input=script, text=True,
+            capture_output=True, timeout=15
+        )
+        assert checked.returncode == 0, checked.stderr

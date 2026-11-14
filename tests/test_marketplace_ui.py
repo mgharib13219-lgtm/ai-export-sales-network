@@ -28,6 +28,9 @@ def test_public_marketplace_page_is_available_and_has_safe_dom_rendering():
     # the entire inline script before any marketplace control can run.
     assert "async function register()" in response.text
     assert "async function discoverBuyers()" in response.text
+    # A bare `async` expression is valid JavaScript syntax but throws at runtime,
+    # aborting the rest of the page script and leaving every control inactive.
+    assert not re.search(r"(?m)^\s*async\s*$", response.text)
 
 
 
