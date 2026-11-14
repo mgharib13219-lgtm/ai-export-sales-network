@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 import hmac
 from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, Depends, HTTPException, Header, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from app.workflow import run_opportunity_pipeline
@@ -16,7 +16,7 @@ from agents.quote import QuoteAgent
 from agents.negotiation import NegotiationAgent
 from app.rate_limit import pipeline_limiter
 from app.marketplace import router as marketplace_router, init_marketplace
-from app.marketplace_ui import router as marketplace_ui_router
+from app.marketplace_ui import router as marketplace_ui_router, marketplace_home
 from app.buyer_workspace_ui import router as buyer_workspace_ui_router
 from app.admin_operations_ui import router as admin_operations_ui_router
 from app.agent_runtime import router as agent_work_router, init_agent_runtime
