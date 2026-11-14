@@ -20,12 +20,40 @@ textarea{min-height:90px}button{background:#172b4d;color:white;cursor:pointer;bo
 button.secondary{background:#eef2f6;color:#182230;border:1px solid #d7dde5}
 .card{border:1px solid #e5e9ef;border-radius:10px;padding:12px;margin:8px 0}
 .status{padding:8px;background:#f0f4f8;border-radius:8px;white-space:pre-wrap}
+.poster-grid{display:grid;grid-template-columns:1.55fr 1fr;gap:14px;margin:14px 0}
+.poster{position:relative;isolation:isolate;overflow:hidden;min-height:230px;border-radius:18px;padding:24px;color:#fff;background:linear-gradient(120deg,#061b49,#0755a5 58%,#12a8c7);box-shadow:0 12px 28px #12345a20}
+.poster:before,.poster:after{content:"";position:absolute;z-index:-1;border:1px solid #ffffff35;border-radius:50%;width:260px;height:260px;right:-65px;top:-100px;box-shadow:0 0 0 22px #ffffff0b,0 0 0 48px #ffffff08}
+.poster:after{width:150px;height:150px;right:0;top:-45px}
+.poster-kicker{font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:#bdeaff;font-weight:800}
+.poster h2{font-size:clamp(24px,3.2vw,38px);line-height:1.25;margin:14px 0 8px;max-width:600px;color:#fff}
+.poster p{color:#e3f4ff;max-width:570px;line-height:1.8;margin:8px 0 18px}
+.poster-art{position:absolute;right:22px;bottom:10px;font-size:78px;opacity:.23;filter:drop-shadow(0 10px 20px #001)}
+.poster-link{display:inline-flex;align-items:center;gap:8px;padding:10px 16px;border-radius:999px;background:#ffc247;color:#102b53;text-decoration:none;font-weight:800}
+.poster-secondary{background:linear-gradient(135deg,#063b48,#087d79 65%,#15a88b)}
+.poster-secondary .poster-link{background:#fff;color:#075b5c}
+@media(max-width:700px){.poster-grid{grid-template-columns:1fr}.poster{min-height:210px;padding:20px}.poster-art{font-size:62px;right:16px}.poster h2{max-width:90%}}
 [hidden]{display:none!important}
 </style></head><body>
 <header><h1>بازار تجارت جهانی</h1>
 <div class="grid" style="align-items:center"><span class="muted" id="language-label">زبان / Language</span><select id="language" aria-label="Language"><option value="fa">فارسی</option><option value="en">English</option></select></div><nav aria-label="ناوبری اصلی"><a href="/market">بازار جهانی</a><a href="/trade/workspace">انبار و لیست قیمت صادراتی</a><a href="/buyer/workspace">پنل خریدار</a></nav>
 <p class="muted">ثبت محصول، درخواست خرید و کشف تأمین‌کننده برای هر نوع کالا. تطبیق‌ها پیشنهادی‌اند و به‌معنای تأیید هویت یا مجوز تجاری نیستند.</p>
 <div class="grid"><button id="logout" class="secondary" hidden>خروج از حساب</button><span id="account" class="status">برای شروع وارد شوید یا حساب بسازید.</span></div></header>
+<section class="poster-grid" aria-label="معرفی بازار تجارت جهانی">
+ <article class="poster">
+  <span class="poster-kicker" id="poster1-kicker">AI-POWERED GLOBAL TRADE</span>
+  <h2 id="poster1-title">بازار جهانی، فرصت‌های بی‌مرز</h2>
+  <p id="poster1-copy">محصولت را معرفی کن، خریدار مناسب را پیدا کن و مسیر صادرات را هوشمندانه‌تر پیش ببر.</p>
+  <a class="poster-link" href="/trade/workspace" id="poster1-cta">معرفی محصولات صادراتی ←</a>
+  <span class="poster-art" aria-hidden="true">🌐 🚢</span>
+ </article>
+ <article class="poster poster-secondary">
+  <span class="poster-kicker" id="poster2-kicker">BUYERS & SUPPLIERS</span>
+  <h2 id="poster2-title">از درخواست تا تأمین</h2>
+  <p id="poster2-copy">درخواست خرید ثبت کن یا میان فرصت‌های تأمین، گزینه‌های مرتبط را پیدا کن.</p>
+  <a class="poster-link" href="/buyer/workspace" id="poster2-cta">ثبت درخواست خرید ←</a>
+  <span class="poster-art" aria-hidden="true">🤝 📦</span>
+ </article>
+</section>
 <section id="auth"><h2>ورود یا ثبت‌نام</h2><div class="grid">
 <input id="email" type="email" placeholder="ایمیل کاری">
 <input id="password" type="password" placeholder="گذرواژه (حداقل ۱۲ نویسه)">
@@ -71,7 +99,7 @@ async function api(path,options={}) {
 
 const languageCopy={
  en:{
-  title:'Global Trade Marketplace',nav:['Global marketplace','Export inventory & price lists','Buyer workspace'],
+  title:'Global Trade Marketplace',poster1title:'Global reach. More opportunities.',poster1copy:'Showcase your products, find relevant buyers and move export opportunities forward.',poster1cta:'List export products →',poster2title:'From request to supply',poster2copy:'Post a buying request or discover relevant supply opportunities.',poster2cta:'Post a buying request →',nav:['Global marketplace','Export inventory & price lists','Buyer workspace'],
   headings:['Global Trade Marketplace','Sign in or create an account','Account security','Plan and account features','Buyer discovery agent','Iran Customs Tariff Directory (HS)','Product search','Publish a product','Open purchase requests','Create a purchase request'],
   ids:{account:'Sign in or create an account to begin.',register:'Create account',login:'Sign in',changepass:'Change password and sign out all devices',discoverbuyers:'Find buyers',refreshBuyerCandidates:'Show saved leads',hscodebtn:'Search tariffs',searchbtn:'Search',publish:'Publish product',loadrequests:'Load requests',submitrequest:'Submit request',logout:'Sign out'},
   placeholders:{email:'Business email',password:'Password (at least 12 characters)',company:'Company name',country:'Country',hscodeq:'Tariff code or product name',search:'Product name or specifications',category:'Category',buyerterms:'Product or keyword, e.g. industrial pump parts',buyercountry:'Target country, e.g. Germany',pname:'Product name',pcategory:'Category',porigin:'Country of origin',pcapacity:'Production capacity',pmoq:'Minimum order quantity',pmarkets:'Target markets',rtitle:'Product name',rcategory:'Category',rdestination:'Destination country',rquantity:'Required quantity'},
@@ -81,7 +109,7 @@ const languageCopy={
   role:['Producer / Supplier','Buyer'],levels:['All levels','2 digits','4 digits','6 digits','8 digits']
  },
  fa:{
-  title:'بازار تجارت جهانی',nav:['بازار جهانی','انبار و لیست قیمت صادراتی','پنل خریدار'],
+  title:'بازار تجارت جهانی',poster1title:'بازار جهانی، فرصت‌های بی‌مرز',poster1copy:'محصولت را معرفی کن، خریدار مناسب را پیدا کن و مسیر صادرات را هوشمندانه‌تر پیش ببر.',poster1cta:'معرفی محصولات صادراتی ←',poster2title:'از درخواست تا تأمین',poster2copy:'درخواست خرید ثبت کن یا میان فرصت‌های تأمین، گزینه‌های مرتبط را پیدا کن.',poster2cta:'ثبت درخواست خرید ←',nav:['بازار جهانی','انبار و لیست قیمت صادراتی','پنل خریدار'],
   headings:['بازار تجارت جهانی','ورود یا ثبت‌نام','امنیت حساب','پلن و امکانات حساب','جست‌وجوی خریدار با ایجنت','فهرست جامع تعرفه‌های گمرکی ایران (HS)','جست‌وجوی محصولات','ثبت محصول','درخواست‌های خرید باز','ثبت درخواست خرید'],
   ids:{account:'برای شروع وارد شوید یا حساب بسازید.',register:'ایجاد حساب',login:'ورود',changepass:'تغییر گذرواژه و خروج از همه دستگاه‌ها',discoverbuyers:'جست‌وجوی خریداران',refreshBuyerCandidates:'نمایش سرنخ‌های ذخیره‌شده',hscodebtn:'جست‌وجوی تعرفه',searchbtn:'جست‌وجو',publish:'انتشار محصول',loadrequests:'بارگذاری درخواست‌ها',submitrequest:'ثبت درخواست',logout:'خروج از حساب'},
   placeholders:{email:'ایمیل کاری',password:'گذرواژه (حداقل ۱۲ نویسه)',company:'نام شرکت',country:'کشور',hscodeq:'کد تعرفه یا نام کالا',search:'نام یا مشخصات محصول',category:'دسته‌بندی',buyerterms:'محصول یا کلمه کلیدی، مثلاً قطعات پمپ صنعتی',buyercountry:'کشور هدف، مثلاً آلمان',pname:'نام محصول',pcategory:'دسته‌بندی',porigin:'کشور مبدأ',pcapacity:'ظرفیت تولید',pmoq:'حداقل سفارش',pmarkets:'بازارهای هدف',rtitle:'نام کالا',rcategory:'دسته‌بندی',rdestination:'کشور مقصد',rquantity:'مقدار موردنیاز'},
@@ -95,10 +123,11 @@ function applyLanguage(lang){
  const t=languageCopy[lang]||languageCopy.fa,english=lang==='en';
  document.documentElement.lang=english?'en':'fa';document.documentElement.dir=english?'ltr':'rtl';
  document.title=t.title;
+ $('poster1-title').textContent=t.poster1title;$('poster1-copy').textContent=t.poster1copy;$('poster1-cta').textContent=t.poster1cta;$('poster2-title').textContent=t.poster2title;$('poster2-copy').textContent=t.poster2copy;$('poster2-cta').textContent=t.poster2cta;
  document.querySelector('header h1').textContent=t.headings[0];
  document.querySelector('header .muted').textContent=t.intro;
  document.querySelectorAll('header nav a').forEach((a,i)=>a.textContent=t.nav[i]||a.textContent);
- document.querySelectorAll('h2').forEach((e,i)=>{if(t.headings[i+1])e.textContent=t.headings[i+1];});
+ document.querySelectorAll('section:not(.poster-grid) h2').forEach((e,i)=>{if(t.headings[i+1])e.textContent=t.headings[i+1];});
  Object.entries(t.ids).forEach(([id,value])=>{const e=$(id);if(e)e.textContent=value;});
  Object.entries(t.placeholders).forEach(([id,value])=>{const e=$(id);if(e)e.placeholder=value;});
  const role=$('role');role.options[0].textContent=t.role[0];role.options[1].textContent=t.role[1];
