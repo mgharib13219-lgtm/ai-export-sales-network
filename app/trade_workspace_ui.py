@@ -20,7 +20,7 @@ button:disabled{opacity:.5}.card{border:1px solid #e2e8f0;border-radius:11px;pad
 .row{display:flex;gap:8px;align-items:center}.row>*{flex:1}.actions button{width:auto;min-width:125px}[hidden]{display:none!important}
 @media(max-width:600px){body{padding:9px}.row{display:block}.actions button{width:100%}}
 </style></head><body>
-<header><h1>فضای کاری تأمین‌کننده</h1>
+<header><div class="actions"><button id="langToggle" class="secondary" type="button">English</button></div><h1>فضای کاری تأمین‌کننده</h1>
 <p class="muted">مدیریت موجودی انبار و لیست قیمت صادراتی در یک صفحه. اطلاعات کالا و موجودی توسط شرکت شما ثبت می‌شود و به‌تنهایی گواهی بازرسی یا تأیید مستقل موجودی نیست.</p>
 <nav><a href="/dashboard">داشبورد عملیاتی</a><a href="/market">بازار جهانی</a><a href="/docs">مستندات API</a></nav></header>
 <section id="auth"><h2>ورود به فضای کاری</h2><p class="muted">برای ادامه، از حساب تأمین‌کننده در بازار جهانی وارد شوید.</p><a href="/market">ورود یا ساخت حساب ←</a><p id="authmsg" class="status">در حال بررسی حساب...</p></section>
@@ -41,6 +41,9 @@ button:disabled{opacity:.5}.card{border:1px solid #e2e8f0;border-radius:11px;pad
 const $=id=>document.getElementById(id),token=()=>sessionStorage.getItem("market_token")||"";
 let user=null,stock=[],lists=[],selected=null;
 const msg=(id,s)=>$(id).textContent=String(s||"");
+const copy={fa:{title:"فضای کاری تأمین‌کننده",dashboard:"داشبورد عملیاتی",market:"بازار جهانی",docs:"مستندات API",auth:"ورود به فضای کاری",login:"برای ادامه، از حساب تأمین‌کننده در بازار جهانی وارد شوید.",loginLink:"ورود یا ساخت حساب ←",overview:"نمای کلی موجودی",refresh:"به‌روزرسانی",inventory:"ثبت موجودی انبار",pricing:"لیست قیمت صادراتی",saveStock:"ثبت موجودی",newList:"ایجاد پیش‌نویس لیست قیمت",stockList:"موجودی‌های ثبت‌شده",lists:"لیست‌های قیمت شما"},en:{title:"Supplier workspace",dashboard:"Operations dashboard",market:"Global marketplace",docs:"API documentation",auth:"Sign in to your workspace",login:"To continue, sign in to the global marketplace with a supplier account.",loginLink:"Sign in or create an account →",overview:"Inventory overview",refresh:"Refresh",inventory:"Add warehouse inventory",pricing:"Export price lists",saveStock:"Save inventory",newList:"Create price-list draft",stockList:"Registered inventory",lists:"Your price lists"}};
+function setLanguage(lang){const en=lang==="en",d=en?copy.en:copy.fa;document.documentElement.lang=lang;document.documentElement.dir=en?"ltr":"rtl";$("langToggle").textContent=en?"فارسی":"English";$("langToggle").setAttribute("aria-label",en?"Switch to Persian":"Switch to English");document.querySelector("header h1").textContent=d.title;const links=document.querySelectorAll("nav a");[d.dashboard,d.market,d.docs].forEach((v,i)=>{if(links[i])links[i].textContent=v;});$("#auth h2").textContent=d.auth;$("#auth .muted").textContent=d.login;$("#auth a").textContent=d.loginLink;$("#overview h2").textContent=d.overview;$("#refresh").textContent=d.refresh;$("#inventory h2").textContent=d.inventory;$("#pricing h2").textContent=d.pricing;$("#saveStock").textContent=d.saveStock;$("#newList").textContent=d.newList;$("#stockList").previousElementSibling.textContent=d.stockList;$("#lists").previousElementSibling.textContent=d.lists;localStorage.setItem("supplier_workspace_lang",lang);}
+
 const node=(tag,cls,s)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(s!==undefined)n.textContent=String(s);return n;};
 const btn=(s,cls,fn)=>{const b=node("button",cls,s);b.type="button";b.addEventListener("click",fn);return b;};
 async function api(path,opt){
@@ -81,7 +84,7 @@ $("saveStock").addEventListener("click",async()=>{const p={sku:$("sku").value.tr
 $("newList").addEventListener("click",async()=>{const p={name:$("listName").value.trim(),currency:$("currency").value.trim().toUpperCase(),valid_from:$("from").value||null,valid_until:$("until").value||null};if(p.name.length<2||p.currency.length<3){msg("listmsg","نام لیست و ارز معتبر را وارد کنید.");return;}try{const r=await api("/trade/price-lists",{method:"POST",body:JSON.stringify(p)});$("listName").value="";await loadLists();const x=lists.find(y=>y.id===r.price_list_id);if(x)selectList(x);msg("listmsg","پیش‌نویس ساخته شد؛ اقلام قیمت را اضافه کنید.");}catch(e){msg("listmsg",explain(e));}});
 $("addItem").addEventListener("click",async()=>{if(!selected)return;const p={product_name:$("itemName").value.trim(),unit:$("itemUnit").value.trim(),unit_price:Number($("unitPrice").value),minimum_quantity:Number($("moq").value),incoterm:$("incoterm").value||null,destination_country:$("destination").value.trim()||null};if(p.product_name.length<2||!p.unit||!Number.isFinite(p.unit_price)||p.unit_price<=0||!Number.isFinite(p.minimum_quantity)||p.minimum_quantity<=0){msg("itemmsg","نام، واحد، قیمت مثبت و حداقل سفارش معتبر لازم است.");return;}try{await api("/trade/price-lists/"+selected+"/items",{method:"POST",body:JSON.stringify(p)});["itemName","itemUnit","unitPrice","destination"].forEach(id=>$(id).value="");$("moq").value="1";$("incoterm").value="";msg("itemmsg","قلم قیمت اضافه شد.");await loadLists();}catch(e){msg("itemmsg",explain(e));}});
 $("cancelSelect").addEventListener("click",clearList);$("refresh").addEventListener("click",async()=>{try{await Promise.all([loadStock(),loadLists()]);}catch(e){msg("authmsg",explain(e));}});
-initialize();
+$("langToggle").addEventListener("click",()=>setLanguage(document.documentElement.lang==="fa"?"en":"fa"));setLanguage(localStorage.getItem("supplier_workspace_lang")==="en"?"en":"fa");initialize();
 })();
 </script></body></html>"""
 

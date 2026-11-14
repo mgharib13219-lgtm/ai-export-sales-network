@@ -133,6 +133,9 @@ def test_trade_workspace_page_and_script():
     response = TestClient(app).get("/trade/workspace")
     assert response.status_code == 200
     assert 'id="inventory"' in response.text and 'id="pricing"' in response.text
+    assert 'id="langToggle"' in response.text
+    assert "Supplier workspace" in response.text
+    assert "supplier_workspace_lang" in response.text
     assert "/trade/inventory" in response.text and "/trade/price-lists" in response.text
     assert "innerHTML" not in response.text
     assert response.headers["x-frame-options"] == "DENY"
