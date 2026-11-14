@@ -66,6 +66,9 @@ def test_buyer_workspace_page_is_registered():
     response = TestClient(app).get("/buyer/workspace")
     assert response.status_code == 200
     assert 'id="requestList"' in response.text
+    assert 'id="langToggle"' in response.text
+    assert "Buyer workspace" in response.text
+    assert "buyer_workspace_lang" in response.text
     assert response.headers["x-frame-options"] == "DENY"
 
 
