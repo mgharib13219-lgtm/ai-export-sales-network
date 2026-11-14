@@ -11,16 +11,21 @@ concurrency:
 jobs:
   run-agent:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
+      - name: Require scheduler credentials
+        env:
+          AGENT_CRON_TOKEN: ${{ secrets.AGENT_CRON_TOKEN }}
+        run: |
+          if [ -z "$AGENT_CRON_TOKEN" ]; then
+            echo "::error::AGENT_CRON_TOKEN is missing. Configure the same strong random token in GitHub Actions and Render."
+            exit 1
+          fi
       - name: Call the opt-in agent endpoint
         env:
           AGENT_CRON_TOKEN: ${{ secrets.AGENT_CRON_TOKEN }}
           AGENT_BASE_URL: https://ai-export-sales-network.onrender.com
         run: |
-          if [ -z "$AGENT_CRON_TOKEN" ]; then
-            echo 'Skipped: configure the AGENT_CRON_TOKEN repository secret after setting the same value in Render.'
-            exit 0
-          fi
           curl --fail-with-body --silent --show-error \
             --retry 2 --retry-delay 10 --max-time 180 \
             -X POST "$AGENT_BASE_URL/agent/cron/run" \
