@@ -56,7 +56,7 @@ button:hover{filter:brightness(1.06);transform:translateY(-1px)}button.secondary
 @media(min-width:681px){header nav{display:flex!important}}
 
 /* Accessibility, page identity and navigation consistency */
-html{scroll-behavior:smooth;scroll-padding-top:18px}body{min-height:100vh;display:flex;flex-direction:column}body>header{order:0}body>section{order:1}body>footer{order:2;margin-top:auto}
+html{scroll-behavior:smooth;scroll-padding-top:18px}body{min-height:100vh}body>footer{margin-top:24px}
 #skip-to-content{position:absolute;top:-100px;right:12px;z-index:1000;padding:10px 14px;background:#102f52;color:#fff;border-radius:10px}#skip-to-content:focus{top:12px}
 header nav a[aria-current=page]{background:#0759a6;color:#fff!important;border-color:#0759a6;box-shadow:0 5px 14px #0759a622}
 footer.site-footer{display:grid;grid-template-columns:1.3fr 1fr;gap:18px;padding:20px 22px;margin:18px 0 4px;background:#102f52;color:#e8f2ff;border-radius:18px}
