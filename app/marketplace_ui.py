@@ -23,7 +23,7 @@ button.secondary{background:#eef2f6;color:#182230;border:1px solid #d7dde5}
 [hidden]{display:none!important}
 </style></head><body>
 <header><h1>بازار تجارت جهانی</h1>
-<div class="grid" style="align-items:center"><span class="muted" id="language-label">زبان / Language</span><select id="language" aria-label="Language"><option value="fa">فارسی</option><option value="en">English</option></select></div><nav aria-label="ناوبری اصلی"><a href="/dashboard">داشبورد عملیاتی</a><a href="/market">بازار جهانی</a><a href="/trade/workspace">انبار و لیست قیمت صادراتی</a><a href="/buyer/workspace">پنل خریدار</a></nav>
+<div class="grid" style="align-items:center"><span class="muted" id="language-label">زبان / Language</span><select id="language" aria-label="Language"><option value="fa">فارسی</option><option value="en">English</option></select></div><nav aria-label="ناوبری اصلی"><a href="/market">بازار جهانی</a><a href="/trade/workspace">انبار و لیست قیمت صادراتی</a><a href="/buyer/workspace">پنل خریدار</a></nav>
 <p class="muted">ثبت محصول، درخواست خرید و کشف تأمین‌کننده برای هر نوع کالا. تطبیق‌ها پیشنهادی‌اند و به‌معنای تأیید هویت یا مجوز تجاری نیستند.</p>
 <div class="grid"><button id="logout" class="secondary" hidden>خروج از حساب</button><span id="account" class="status">برای شروع وارد شوید یا حساب بسازید.</span></div></header>
 <section id="auth"><h2>ورود یا ثبت‌نام</h2><div class="grid">
@@ -71,7 +71,7 @@ async function api(path,options={}) {
 
 const languageCopy={
  en:{
-  title:'Global Trade Marketplace',nav:['Dashboard','Global marketplace','Export inventory & price lists','Buyer workspace'],
+  title:'Global Trade Marketplace',nav:['Global marketplace','Export inventory & price lists','Buyer workspace'],
   headings:['Global Trade Marketplace','Sign in or create an account','Account security','Plan and account features','Buyer discovery agent','Iran Customs Tariff Directory (HS)','Product search','Publish a product','Open purchase requests','Create a purchase request'],
   ids:{account:'Sign in or create an account to begin.',register:'Create account',login:'Sign in',changepass:'Change password and sign out all devices',discoverbuyers:'Find buyers',refreshBuyerCandidates:'Show saved leads',hscodebtn:'Search tariffs',searchbtn:'Search',publish:'Publish product',loadrequests:'Load requests',submitrequest:'Submit request',logout:'Sign out'},
   placeholders:{email:'Business email',password:'Password (at least 12 characters)',company:'Company name',country:'Country',hscodeq:'Tariff code or product name',search:'Product name or specifications',category:'Category',buyerterms:'Product or keyword, e.g. industrial pump parts',buyercountry:'Target country, e.g. Germany',pname:'Product name',pcategory:'Category',porigin:'Country of origin',pcapacity:'Production capacity',pmoq:'Minimum order quantity',pmarkets:'Target markets',rtitle:'Product name',rcategory:'Category',rdestination:'Destination country',rquantity:'Required quantity'},
@@ -81,7 +81,7 @@ const languageCopy={
   role:['Producer / Supplier','Buyer'],levels:['All levels','2 digits','4 digits','6 digits','8 digits']
  },
  fa:{
-  title:'بازار تجارت جهانی',nav:['داشبورد','بازار جهانی','انبار و لیست قیمت صادراتی','پنل خریدار'],
+  title:'بازار تجارت جهانی',nav:['بازار جهانی','انبار و لیست قیمت صادراتی','پنل خریدار'],
   headings:['بازار تجارت جهانی','ورود یا ثبت‌نام','امنیت حساب','پلن و امکانات حساب','جست‌وجوی خریدار با ایجنت','فهرست جامع تعرفه‌های گمرکی ایران (HS)','جست‌وجوی محصولات','ثبت محصول','درخواست‌های خرید باز','ثبت درخواست خرید'],
   ids:{account:'برای شروع وارد شوید یا حساب بسازید.',register:'ایجاد حساب',login:'ورود',changepass:'تغییر گذرواژه و خروج از همه دستگاه‌ها',discoverbuyers:'جست‌وجوی خریداران',refreshBuyerCandidates:'نمایش سرنخ‌های ذخیره‌شده',hscodebtn:'جست‌وجوی تعرفه',searchbtn:'جست‌وجو',publish:'انتشار محصول',loadrequests:'بارگذاری درخواست‌ها',submitrequest:'ثبت درخواست',logout:'خروج از حساب'},
   placeholders:{email:'ایمیل کاری',password:'گذرواژه (حداقل ۱۲ نویسه)',company:'نام شرکت',country:'کشور',hscodeq:'کد تعرفه یا نام کالا',search:'نام یا مشخصات محصول',category:'دسته‌بندی',buyerterms:'محصول یا کلمه کلیدی، مثلاً قطعات پمپ صنعتی',buyercountry:'کشور هدف، مثلاً آلمان',pname:'نام محصول',pcategory:'دسته‌بندی',porigin:'کشور مبدأ',pcapacity:'ظرفیت تولید',pmoq:'حداقل سفارش',pmarkets:'بازارهای هدف',rtitle:'نام کالا',rcategory:'دسته‌بندی',rdestination:'کشور مقصد',rquantity:'مقدار موردنیاز'},
@@ -248,7 +248,7 @@ function renderAccount(){
   if(billingState==='success')showMessage('upgradeMessage','از صفحهٔ پرداخت برگشته‌اید؛ پلن فقط پس از تأیید امن وب‌هوک به‌روزرسانی می‌شود.');
   else if(billingState==='cancel')showMessage('upgradeMessage','پرداخت لغو شد؛ پلن فعلی شما بدون تغییر باقی ماند.');
   loadSubscription().catch(e=>showMessage('subscriptionstate',e.message));
-  loadSavedBuyerCandidates();
+  // Saved leads are loaded only when the supplier explicitly opens that section.
  }
 }
 async function changePassword(){
@@ -297,7 +297,7 @@ $('loadrequests').addEventListener('click',loadRequests);
 $('discoverbuyers').addEventListener('click',discoverBuyers);
 $('refreshBuyerCandidates').addEventListener('click',loadSavedBuyerCandidates);
 $('logout').addEventListener('click',async()=>{try{await api('/marketplace/logout',{method:'POST'});}catch{}sessionStorage.removeItem('market_token');user=null;renderAccount();});
-loadProducts().catch(e=>showMessage('products',e.message));
+// Product search is intentionally lazy: avoid an API round-trip on every page visit.
 let initialLanguage='fa';try{initialLanguage=localStorage.getItem('market_language')||'fa';}catch{}applyLanguage(initialLanguage);
 if(token())api('/marketplace/me').then(data=>{user=data;renderAccount();}).catch(()=>{sessionStorage.removeItem('market_token');renderAccount();});
 </script></body></html>"""
@@ -311,5 +311,5 @@ def marketplace_home():
         "Referrer-Policy": "strict-origin-when-cross-origin",
         "X-Frame-Options": "DENY",
         "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
-        "Cache-Control": "no-store",
+        "Cache-Control": "public, max-age=60, stale-while-revalidate=300",
     })
