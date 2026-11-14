@@ -43,14 +43,14 @@ button.secondary{background:#eef2f6;color:#182230;border:1px solid #d7dde5}
   <span class="poster-kicker" id="poster1-kicker">AI-POWERED GLOBAL TRADE</span>
   <h2 id="poster1-title">بازار جهانی، فرصت‌های بی‌مرز</h2>
   <p id="poster1-copy">محصولت را معرفی کن، خریدار مناسب را پیدا کن و مسیر صادرات را هوشمندانه‌تر پیش ببر.</p>
-  <a class="poster-link" href="/trade/workspace" id="poster1-cta">معرفی محصولات صادراتی ←</a>
+  <a class="poster-link" href="#auth" data-register-role="producer" id="poster1-cta">معرفی محصولات صادراتی ←</a>
   <span class="poster-art" aria-hidden="true">🌐 🚢</span>
  </article>
  <article class="poster poster-secondary">
   <span class="poster-kicker" id="poster2-kicker">BUYERS & SUPPLIERS</span>
   <h2 id="poster2-title">از درخواست تا تأمین</h2>
   <p id="poster2-copy">درخواست خرید ثبت کن یا میان فرصت‌های تأمین، گزینه‌های مرتبط را پیدا کن.</p>
-  <a class="poster-link" href="/buyer/workspace" id="poster2-cta">ثبت درخواست خرید ←</a>
+  <a class="poster-link" href="#auth" data-register-role="buyer" id="poster2-cta">ثبت درخواست خرید ←</a>
   <span class="poster-art" aria-hidden="true">🤝 📦</span>
  </article>
 </section>
@@ -316,6 +316,16 @@ async function loadRequests(){
   if(!data.length)box.append(node('p','muted','درخواست خرید بازی وجود ندارد.'));
  }catch(e){showMessage('requests',e.message);}
 }
+
+document.querySelectorAll('[data-register-role]').forEach(link=>{
+ link.addEventListener('click',event=>{
+  event.preventDefault();
+  $('role').value=link.dataset.registerRole;
+  $('auth').scrollIntoView({behavior:'smooth',block:'start'});
+  window.location.hash='auth';
+  window.setTimeout(()=>$('email').focus({preventScroll:true}),250);
+ });
+});
 $('language').addEventListener('change',e=>applyLanguage(e.target.value));
 $('register').addEventListener('click',register);$('login').addEventListener('click',login);$('changepass').addEventListener('click',changePassword);
 $('publish').addEventListener('click',publish);$('submitrequest').addEventListener('click',submitRequest);
