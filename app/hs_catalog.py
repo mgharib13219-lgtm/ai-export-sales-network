@@ -1,8 +1,7 @@
 """Iranian customs HS master catalogue with controlled CSV ingestion.
 
-The importer accepts the source file as UTF-8 CSV in the request body. It does
-not fabricate tariff rows: only supplied source rows are persisted, with source
-and import timestamp recorded. Supports 2/4/6/8 digit HS hierarchy codes.
+Only rows supplied from an identified source are persisted. The importer
+preserves leading zeroes and validates code widths and parent hierarchy.
 """
 import csv
 import io
@@ -12,7 +11,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from app.auth import require_admin
-from app.db import _con, _execute, _is_postgres
+from app.db import _con, _execute
 
 router = APIRouter(prefix="/trade/hs-catalog", tags=["iran-hs-catalog"])
 
@@ -27,21 +26,23 @@ SOURCE_KEYS = ("source", "source_id", "منبع")
 
 def init_hs_catalog():
     con = _con()
-    sql = """CREATE TABLE IF NOT EXISTS iran_hs_catalog (
-        hs_code TEXT PRIMARY KEY,
-        description_fa TEXT NOT NULL,
-        description_en TEXT NOT NULL DEFAULT '',
-        parent_code TEXT,
-        source TEXT NOT NULL,
-        source_version TEXT NOT NULL DEFAULT '',
-        imported_at TIMESTAMP NOT NULL,
-        is_active INTEGER NOT NULL DEFAULT 1
-    )"""
-    _execute(con, sql)
-    _execute(con, "CREATE INDEX IF NOT EXISTS idx_iran_hs_fa ON iran_hs_catalog(description_fa)")
-    _execute(con, "CREATE INDEX IF NOT EXISTS idx_iran_hs_parent ON iran_hs_catalog(parent_code)")
-    con.commit()
-    con.close()
+    try:
+        sql = """CREATE TABLE IF NOT EXISTS iran_hs_catalog (
+            hs_code TEXT PRIMARY KEY,
+            description_fa TEXT NOT NULL,
+            description_en TEXT NOT NULL DEFAULT '',
+            parent_code TEXT,
+            source TEXT NOT NULL,
+            source_version TEXT NOT NULL DEFAULT '',
+            imported_at TIMESTAMP NOT NULL,
+            is_active INTEGER NOT NULL DEFAULT 1
+        )"""
+        _execute(con, sql)
+        _execute(con, "CREATE INDEX IF NOT EXISTS idx_iran_hs_fa ON iran_hs_catalog(description_fa)")
+        _execute(con, "CREATE INDEX IF NOT EXISTS idx_iran_hs_parent ON iran_hs_catalog(parent_code)")
+        con.commit()
+    finally:
+        con.close()
 
 
 def _pick(row, keys):
@@ -57,54 +58,63 @@ def _normalize_code(value, digits=None):
     raw = str(value or "").strip().replace(",", "").replace(" ", "")
     if raw.endswith(".0"):
         raw = raw[:-2]
-    if not raw.isdigit():
+    if not re.fullmatch(r"[0-9]+", raw):
         return ""
     width = int(digits) if str(digits or "").isdigit() else len(raw)
-    if width not in (2, 4, 6, 8):
+    if width not in (2, 4, 6, 8) or len(raw) > width:
         return ""
     return raw.zfill(width)
+
+
+def _prepare_csv_rows(text, source, source_version, imported_at):
+    """Validate the entire CSV before opening a database transaction."""
+    reader = csv.DictReader(io.StringIO(text.lstrip("\ufeff")))
+    if not reader.fieldnames:
+        raise ValueError("missing_csv_header")
+    prepared = []
+    seen = set()
+    for line_no, row in enumerate(reader, start=2):
+        raw_code = re.sub(r"\s+", "", _pick(row, CODE_KEYS))
+        digits = _pick(row, DIGITS_KEYS)
+        code = _normalize_code(raw_code, digits or None)
+        fa = _pick(row, FA_KEYS)
+        en = _pick(row, EN_KEYS)
+        raw_parent = _pick(row, PARENT_KEYS)
+        row_source = _pick(row, SOURCE_KEYS) or source
+        if not raw_code and not fa:
+            continue
+        if not fa:
+            raise ValueError(f"missing_persian_description_at_line_{line_no}")
+        if not code:
+            raise ValueError(f"invalid_hs_code_at_line_{line_no}")
+        expected_parent = code[:-2] if len(code) > 2 else None
+        parent = None
+        if raw_parent:
+            parent = _normalize_code(raw_parent, len(code) - 2 if len(code) > 2 else None)
+            if not expected_parent or parent != expected_parent:
+                raise ValueError(f"invalid_parent_code_at_line_{line_no}")
+        if code in seen:
+            raise ValueError(f"duplicate_hs_code_at_line_{line_no}")
+        seen.add(code)
+        prepared.append((code, fa[:1000], en[:1000], parent or expected_parent,
+                         row_source[:300], source_version, imported_at, 1))
+    if not prepared:
+        raise ValueError("no_valid_rows_found")
+    return prepared
 
 
 @router.post("/import-csv", dependencies=[Depends(require_admin)])
 async def import_hs_csv(request: Request,
                         source: str = Query(min_length=3, max_length=300),
                         source_version: str = Query(default="", max_length=100)):
-    """Replace/upsert tariff descriptions from an explicitly supplied source CSV."""
+    """Upsert rows from a supplied, identified CSV source; never infer missing rows."""
     raw = await request.body()
     if not raw or len(raw) > MAX_CSV_BYTES:
         raise HTTPException(413 if len(raw) > MAX_CSV_BYTES else 400, "csv_missing_or_too_large")
     try:
         text = raw.decode("utf-8-sig")
-        reader = csv.DictReader(io.StringIO(text))
-        if not reader.fieldnames:
-            raise ValueError("missing_csv_header")
         now = datetime.now(timezone.utc).isoformat()
-        prepared = []
-        seen = set()
-        for line_no, row in enumerate(reader, start=2):
-            raw_code = re.sub(r"\s+", "", _pick(row, CODE_KEYS))
-            digits = _pick(row, DIGITS_KEYS)
-            code = _normalize_code(raw_code, digits or None)
-            fa = _pick(row, FA_KEYS)
-            en = _pick(row, EN_KEYS)
-            raw_parent = _pick(row, PARENT_KEYS)
-            row_source = _pick(row, SOURCE_KEYS) or source
-            if not raw_code and not fa:
-                continue
-            if not code:
-                raise ValueError(f"invalid_hs_code_at_line_{line_no}")
-            parent = ""
-            if raw_parent:
-                parent = _normalize_code(raw_parent, len(code) - 2 if len(code) > 2 else None)
-                if not parent or len(code) <= 2:
-                    raise ValueError(f"invalid_parent_code_at_line_{line_no}")
-            if code in seen:
-                raise ValueError(f"duplicate_hs_code_at_line_{line_no}")
-            seen.add(code)
-            prepared.append((code, fa[:1000], en[:1000], parent or (code[:-2] if len(code) > 2 else None),
-                             row_source[:300], source_version, now, 1))
-        if not prepared:
-            raise ValueError("no_valid_rows_found")
+        prepared = _prepare_csv_rows(text, source, source_version, now)
     except (UnicodeDecodeError, csv.Error, ValueError) as exc:
         raise HTTPException(422, str(exc)[:180])
 
@@ -122,8 +132,8 @@ async def import_hs_csv(request: Request,
                 source_version=excluded.source_version,
                 imported_at=excluded.imported_at,
                 is_active=1""", values)
-        con.commit()
         total = _execute(con, "SELECT COUNT(*) AS n FROM iran_hs_catalog WHERE is_active=1").fetchone()["n"]
+        con.commit()
     except Exception:
         con.rollback()
         raise

@@ -22,7 +22,7 @@ button{background:#172b4d;color:white;border:0;cursor:pointer}button.secondary{b
 </style></head><body>
 <header><h1>مرکز عملیات مدیر</h1>
 <p class="muted">نمای یکپارچه CRM، معاملات ثبت‌شده و ردپای رویدادها. این صفحه در این نسخه فقط خواندنی است؛ ارسال پیام، تغییر مرحله معامله یا تأیید تجاری از این داشبورد انجام نمی‌شود.</p>
-<nav><a href="/">داشبورد اصلی</a><a href="/market">بازار جهانی</a><a href="/buyer/workspace">پنل خریدار</a><a href="/trade/workspace">پنل تأمین‌کننده</a></nav></header>
+<nav><a href="/">داشبورد اصلی</a><a href="/market">بازار جهانی</a><a href="/buyer/workspace">پنل خریدار</a><a href="/trade/workspace">پنل تأمین‌کننده</a><a href="/admin/hs-catalog">مدیریت کاتالوگ HS</a></nav></header>
 <section><h2>دسترسی مدیر</h2><p class="muted">توکن مدیر فقط در حافظه نشست همین مرورگر نگهداری می‌شود و در رابط کاربری نمایش داده نخواهد شد.</p>
 <div class="grid"><input id="token" type="password" autocomplete="off" placeholder="ADMIN_TOKEN"><button id="connect">اتصال امن</button><button id="disconnect" class="secondary">خروج مدیر</button></div>
 <p id="message" class="status" aria-live="polite">برای مشاهده اطلاعات، توکن مدیر را وارد کنید.</p></section>
