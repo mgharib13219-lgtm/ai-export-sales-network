@@ -23,11 +23,13 @@ The repository includes `render.yaml` for the web service and PostgreSQL databas
 - `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`: credentials for an authorized SMTP mailbox. Confirm the SMTP port/provider requirements.
 - `AI_BASE_URL`: leave blank unless using a compatible custom endpoint.
 
+**Render Free limitation:** Free web services cannot send outbound traffic on SMTP ports 25, 465, or 587. SMTP delivery configured on those ports will therefore fail on the Free web service plan. Use a paid Render service or implement and configure a supported email HTTP API provider before treating live email as available. Do not rely on the current SMTP integration for production mail on Render Free.
+
 Never commit API keys, SMTP passwords, or the production admin token. The integration status endpoint `/system/integrations` is admin-protected and reports whether the providers are configured. A configured provider does not guarantee that credentials are valid; verify with a controlled test.
 
 ## Current limitations
 
-- Email sending requires configured SMTP credentials and explicit human confirmation for each send.
+- Email sending requires configured SMTP credentials and explicit human confirmation for each send; see the Render Free SMTP port restriction above.
 - Buyer discovery requires a configured search provider; AI analysis requires a valid AI API key and model access.
 - Website/contact evidence is not proof of a buyer's legal identity. Validate important prospects before commercial commitments.
 - Production deployment and live delivery must be verified in the hosting environment; repository CI alone does not prove a live service is running.
@@ -57,7 +59,7 @@ Before the final end-to-end test:
    admin token. Set the identical cron token in the scheduler's secret store.
 2. Configure a supported AI provider and search provider only if those live
    capabilities are required for the test. Configure SMTP only for a controlled
-   mailbox test.
+   mailbox test, and account for host-specific SMTP egress restrictions.
 3. Confirm the production database is PostgreSQL and take a restorable backup.
 4. Deploy, then check `/health`, `/ready`, `/system/readiness`, and
    `/system/integrations` using an authorized admin session.
