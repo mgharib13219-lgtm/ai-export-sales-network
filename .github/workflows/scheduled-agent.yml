@@ -18,8 +18,8 @@ jobs:
           AGENT_BASE_URL: https://ai-export-sales-network.onrender.com
         run: |
           if [ -z "$AGENT_CRON_TOKEN" ]; then
-            echo 'Skipped: configure the AGENT_CRON_TOKEN repository secret after setting the same value in Render.'
-            exit 0
+            echo 'Error: configure the AGENT_CRON_TOKEN repository secret after setting the same value in Render.'
+            exit 1
           fi
           curl --fail-with-body --silent --show-error \
             --retry 2 --retry-delay 10 --max-time 180 \
