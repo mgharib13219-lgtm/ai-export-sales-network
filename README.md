@@ -42,6 +42,10 @@ The specialist runtime is an admin-only, bounded research workflow. It has no mo
 Marketplace authentication and verification remain MVP-grade: email verification, MFA, password recovery, shared-secret approver identity, independent document review, verified-transaction adjudication, sanctions-screening integrations, and full abuse/rate-limit controls remain launch blockers. Do not treat registration, listing, or match scores as trust certification.
 
 
+## Production recovery runbook
+
+See [`docs/PRODUCTION_RECOVERY_AND_LAUNCH_RUNBOOK.md`](docs/PRODUCTION_RECOVERY_AND_LAUNCH_RUNBOOK.md) for the current Render database expiry, safe backup/migration procedure, controlled buyer/supplier acceptance tests, security launch blockers, and operational release checklist. A helper script is provided at `scripts/backup_render_postgres.sh`; it requires an operator-supplied external PostgreSQL URL and does not transmit backups anywhere.
+
 ## Release readiness and final-test gate
 
 The admin-only `GET /system/readiness` endpoint returns a secret-free checklist
