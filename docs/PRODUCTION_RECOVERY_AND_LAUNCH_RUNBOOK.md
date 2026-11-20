@@ -39,6 +39,7 @@ Render Free Postgres expires 30 days after creation, is inaccessible after expir
 - `iran_hs_catalog` currently has zero records.
 - The existing admin-only `POST /trade/hs-catalog/import-csv` endpoint accepts a source CSV and stores source, version and import timestamp.
 - Do not import generated or guessed codes, duty rates, or product descriptions.
+- The World Customs Organization's HS-based tariff/nomenclature directory lists Iran Customs' official tariff portal: https://www.wcoomd.org/-/media/wco/public/global/pdf/topics/nomenclature/overview/hs-contracting-parties/positions-of-cp/situation_hs.pdf?la=en . Obtain the current national schedule directly from IRICA and preserve the edition/effective date. The 1405 tariff amendments reported in April 2026 cover 268 tariff lines, which is a warning that an older static file can be stale; secondary news summaries are not a substitute for the official schedule.
 - Obtain an official, dated customs/tariff source for the relevant jurisdiction and year. Preserve the source file and licence/usage terms. Validate code widths, hierarchy, effective dates, destination country, and rates with a qualified customs broker before showing landed-cost figures.
 - Import first into staging; compare row counts and sample codes against the source; only then import to production. The current catalogue schema stores descriptions/source provenance but is not a complete multi-country tariff-rate model.
 
